@@ -26,5 +26,10 @@ Restrictions:
     . Stack limit is 66560
     . Input limit is 66560, but discord will truncate it
 
-Debugging:
-|| After output is state of stack when program finished
+Switches:
+Usage: termite.exe -d ...
+    -d  : Debug mode
+    -s  : Turn on stack step printing
+    -ns : Turn off stack step printing
+    -l  : Experimental -- Capture state of rewind and terminate program if stack is identical each time i.e. leads to infinite recursion
+    -h  : Output everything as hex
