@@ -1,0 +1,30 @@
+Termite is a small stack-based programming language
+It operates on interpreting input sequence directly without processing it in any way
+Basic structural element of every program is token, there's 3 kinds of them:
+    . Hexadecimals : Byte, consists of 2 characters, letters are capital, - example: 00, 32, FA, 4D
+    . Literals : Any single ASCII compliment character that doesn't correspond to any operator or hex, - example: a b c
+    . Operators : Special symbols that change state of stack or cursor, example -  / @ [
+
+Available operators:
+    < Output    : Pop value and output it to STDOUT
+    . Drop      : Deletes last value from the stack
+    @ Duplicate : Clones last value on the stack
+    ^ Swap      : Swaps two last values
+    ~ Not       : Toggles least significant bit
+    = Equal     : Pops two values, pushes 01 if values are equal or 00 if not
+    ? Compare   : Pops two values, pushes 10 if last values was bigger, 00 otherwise
+    + Add       : Pops two values, pushes result of addition
+    - Subtract  : Pops two values, pushes result of subtraction
+    * Multiply  : Pops two values, pushes result of multiplication
+    / Divide    : Pops two values, pushes result of division
+    # Conveyor  : Moves last value into beginning of stack
+    ] Seek      : Pops N value, seeks N tokens forward
+    [ Rewind    : Pops N value, rewinds N tokens back
+
+Restrictions:
+    . Only 1000 characters could be outputted by discord bot
+    . Stack limit is 66560
+    . Input limit is 66560, but discord will truncate it
+
+Debugging:
+|| After output is state of stack when program finished
