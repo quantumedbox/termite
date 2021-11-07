@@ -2,6 +2,8 @@
 
 // todo: make all strings null terminated?
 // todo: hex printing switch
+// todo: catch inanimately conveyoring loops
+// todo: make switches without '-' leading
 
 typedef void*         HANDLE;
 typedef const void*   LPCVOID;
@@ -29,6 +31,7 @@ static const char input_exhausted[]   = "\n!input exhausted";
 static const char stack_exhausted[]   = "\n!stack exhausted";
 static const char non_ascii_char[]    = "\n!on ASCII char encountered";
 static const char invalid_hex_value[] = "\n!ill-formed hex value";
+static const char zero_division[]     = "\n!division by zero";
 
 static _Bool print_as_hex = (_Bool)0; // todo: i don't want it in global scope, should be on stack
 
@@ -74,7 +77,7 @@ print_stack(unsigned char* chars,
 {
   const char space = ' ';
   for (unsigned int i = 0U; i < len; i++) {
-    if (chars[i] < 0x20)
+    if (chars[i] < 0x20 || print_as_hex)
       print_value_custom(chars[i], (_Bool)1);
     else
       print_value_custom(chars[i], (_Bool)0);
@@ -133,7 +136,7 @@ read_input(_Bool print_stack_steps,
 
   // EXPERIMENTAL: required for checking of infinite loops on rewinds
   // todo: make it compile-time optional?
-  // todo: could be dangerous
+  // todo: could be dangerous to just mul to 0, is such behavior even defined?
   unsigned char shadow_stack[STACK_LIMIT * catch_infinite_recursion];
   unsigned char shadow_stack_rewinded_with = 0U;
   unsigned int shadow_stack_len = 0U;
@@ -148,7 +151,7 @@ read_input(_Bool print_stack_steps,
       case  ' ':
       case '\n':
       case '\r':
-      case '\t': cursor++; break;
+      case '\t': cursor++; continue;
 
       // drop value from stack
       case '.': {
@@ -185,8 +188,10 @@ read_input(_Bool print_stack_steps,
       // 'conveyor belt' operator
       // place last value on the stack at the beginning
       case '#': {
-        if (stack_head == 0U)
+        if (stack_head == 0U) {
+          cursor++;
           break;
+        }
         unsigned char buff = stack[stack_head - 1U];
         for (unsigned int i = 0U; i < stack_head; i++) {
           unsigned char convey = stack[i];
@@ -200,8 +205,10 @@ read_input(_Bool print_stack_steps,
       // 'ronveyor belt' operator aka 'reverse conveyor'
       // place first value on the stack at the end
       case '$': {
-        if (stack_head == 0U)
+        if (stack_head == 0U) {
+          cursor++;
           break;
+        }
         unsigned char buff = stack[0U];
         for (unsigned int i = stack_head; i--;) {
           unsigned char convey = stack[i];
@@ -284,7 +291,8 @@ read_input(_Bool print_stack_steps,
         if (stack_head < 2U)
           crash(unpack_str(stack_exhausted));
         if (stack[stack_head - 1U] == 0U) {
-          ExitProcess(0L); // for now division by 00 terminates program silently
+          crash(unpack_str(zero_division));
+          break;
         }
         stack[stack_head - 2U] = stack[stack_head - 2U] / stack[stack_head - 1U];
         stack_head--;
@@ -296,6 +304,8 @@ read_input(_Bool print_stack_steps,
       case '<': {
         if (stack_head == 0U)
           crash(unpack_str(stack_exhausted));
+        if (print_stack_steps)
+          put("\n");
         print_value(stack[stack_head - 1U]);
         stack_head--;
         cursor++;
@@ -352,7 +362,7 @@ read_input(_Bool print_stack_steps,
         if (catch_infinite_recursion) {
           if (shadow_stack_rewinded_with != 0U) {
             if (value_array_compare(shadow_stack, shadow_stack_len, stack, stack_head)) {
-                put("! HALT ON INFINITE RECURSION !");
+                put("\n! HALT ON INFINITE RECURSION !");
                 cursor = size;
                 break;
               }
@@ -490,16 +500,18 @@ read_input(_Bool print_stack_steps,
         } else
           stack[stack_head++] = (unsigned char)input[cursor++];
       }
-      if (print_stack_steps == (_Bool)1) {
-        put("|");
-        print_stack(stack, stack_head);
-        put("|\n");
-      }
+    }
+    if (print_stack_steps == (_Bool)1) {
+      put("\n|");
+      print_stack(stack, stack_head);
+      put("|");
     }
   }
-  put("\n|");
-  print_stack(stack, stack_head);
-  put("|\n");
+  if (print_stack_steps != (_Bool)1) {
+    put("\n|");
+    print_stack(stack, stack_head);
+    put("|\n");
+  }
 }
 
 int main(int argc, char** argv, char** envp) {

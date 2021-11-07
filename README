@@ -22,9 +22,8 @@ Available operators:
     [ Rewind    : Pops N value, rewinds N tokens back
 
 Restrictions:
-    . Only 1000 characters could be outputted by discord bot
     . Stack limit is 66560
-    . Input limit is 66560, but discord will truncate it
+    . Input limit is 66560
 
 Switches:
 Usage: termite.exe -d ...
