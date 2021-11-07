@@ -7,7 +7,7 @@ Basic structural element of every program is token, there's 3 kinds of them:
 
 Available operators:
     < Output    : Pop value and output it to STDOUT
-    > Input     : Wait for single byte from STDIN, push it on stack
+    > Input     : Tries to read single byte from STDIN and pushes two values: values first, then 01 if something was read or 00 if file is at EOF
     . Drop      : Deletes last value from the stack
     @ Duplicate : Clones last value on the stack
     ^ Swap      : Swaps two last values
@@ -28,9 +28,9 @@ Restrictions:
     . Stack limit is 66560
     . Input limit is 66560
 
-Switches:
-Usage: termite.exe -d ...
-    -d  : Debug mode, includes stack stepping and infloop catching
-    -s  : Turn on stack step printing
-    -ns : Turn off stack step printing
-    -l  : Experimental -- Capture state of rewind and terminate program if stack is identical each time i.e. leads to infinite recursion
+Arguemnt switches:
+Usage: termite.exe d ns ...
+    d  : Debug mode, includes stack stepping and infloop catching
+    s  : Turn on stack step printing
+    ns : Turn off stack step printing
+    l  : Experimental -- Capture state of rewind and terminate program if stack is identical each time i.e. leads to infinite recursion

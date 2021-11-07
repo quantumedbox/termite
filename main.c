@@ -8,20 +8,15 @@
 
 // todo: make all strings null terminated?
 // todo: catch infinitely conveyoring loops
-// todo: make switches without '-' leading?
-// todo: make argument line interface for passing data as initial stack state
-// tood: generic function for reading tokens
-// todo: redo 'put' macro into 'cprint' that prints any NULL terminated strings
 // todo: make OS independent realizations of IO, use only generics here
 // todo: operator for checking if STDIN is at EOF ? or make > return pair of values, one signaling EOF and other - value itself
 //       additionally, what about making value output of > on EOF undefined random value?
 //       could be an interesting source of randomness
-// todo: restrict file names to 128 specifically
+// todo: restrict file names to 128 specifically, always check the size before hand
+// todo: clear STDIN after execution
 
 #define INPUT_LIMIT 66560U // 65KB
 #define STACK_LIMIT 66560U // 65KB
-
-#define unpack_str(str) str, (sizeof(str) - 1ULL)
 
 enum OutputCodes {
   OC_OK,
@@ -29,8 +24,7 @@ enum OutputCodes {
   OC_STACK_OVERFLOW,
   OC_INPUT_EXHAUSTED,
   OC_STACK_EXHAUSTED,
-  OC_NON_ASCII_CHAR, // todo: combine non-ascii and invalid hex into one error? "invalid token" for example
-  OC_INVALID_HEX,
+  OC_INVALID_INPUT,
   OC_ZERO_DIVISION,
   OC_INFINITE_LOOP,
 
@@ -65,11 +59,18 @@ print_stack(unsigned char* chars, unsigned int len)
   }
 }
 
-#define put(msg) \
-  do { \
-    const char msg_impl[] = msg; \
-    print(unpack_str(msg_impl)); \
-  } while (0)
+static unsigned int
+count_cstring(const char* str) {
+  unsigned int len = 0U;
+  while (*str++ != '\0')
+    len++;
+  return len;
+}
+
+static void
+print_cstring(const char* str) {
+  print(str, count_cstring(str));
+}
 
 static _Noreturn void
 crash(unsigned char code)
@@ -91,7 +92,7 @@ read(HANDLE hFile, char* restrict buff, unsigned int limit, unsigned int* restri
 }
 
 static _Bool
-value_array_compare(unsigned char* restrict first, unsigned int first_len,
+compare_value_array(unsigned char* restrict first, unsigned int first_len,
                     unsigned char* restrict second, unsigned int second_len)
 {
   if (first_len != second_len)
@@ -104,7 +105,7 @@ value_array_compare(unsigned char* restrict first, unsigned int first_len,
 }
 
 static _Bool
-cstring_compare(const char* restrict first, const char* restrict second)
+compare_cstring(const char* restrict first, const char* restrict second)
 {
   while ((*first != '\0') && (*second != '\0')) {
     if (*first != *second)
@@ -323,7 +324,7 @@ read_input(const char* filepath,
         if (stack_head == 0U)
           crash(OC_STACK_EXHAUSTED);
         if (print_stack_steps)
-          put("\n");
+          print_cstring("\n");
         print_value(stack[stack_head - 1U]);
         stack_head--;
         cursor++;
@@ -332,7 +333,7 @@ read_input(const char* filepath,
 
       // push single byte from stdin into stack
       case '>': {
-        if (stack_head == STACK_LIMIT)
+        if (stack_head == STACK_LIMIT - 1U)
           crash(OC_STACK_OVERFLOW);
 
         char token;
@@ -340,7 +341,14 @@ read_input(const char* filepath,
         if (!read(GetStdHandle(STD_INPUT_HANDLE), &token, 1U, &chars_read))
           crash(OC_FILE_ERROR);
 
-        stack[stack_head++] = (unsigned char)token;
+        if (chars_read != 0U) {
+          stack[stack_head++] = (unsigned char)token;
+          stack[stack_head++] = 1U;
+        } else {
+          stack[stack_head++] = 0U; // todo: what about outputting random value here?
+          stack[stack_head++] = 0U;
+        }
+
         cursor++;
         break;
       }
@@ -355,7 +363,7 @@ read_input(const char* filepath,
 
         if (catch_infinite_recursion) {
           if (shadow_stack_rewinded_with != 0U) {
-            if (value_array_compare(shadow_stack, shadow_stack_len, stack, stack_head)) {
+            if (compare_value_array(shadow_stack, shadow_stack_len, stack, stack_head)) {
                 crash(OC_INFINITE_LOOP);
                 // cursor = size;
                 // break;
@@ -382,21 +390,21 @@ read_input(const char* filepath,
             case '\t': break;
             default: {
               if (input[cursor] & 0b10000000U)
-                crash(OC_NON_ASCII_CHAR);
+                crash(OC_INVALID_INPUT);
 
               if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
                 if (cursor == 0U)
-                  crash(OC_INVALID_HEX);
+                  crash(OC_INVALID_INPUT);
 
                 cursor--;
 
                 if (input[cursor] & 0b10000000U)
-                  crash(OC_NON_ASCII_CHAR);
+                  crash(OC_INVALID_INPUT);
 
                 if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
                   n_tokens--;
                 } else {
-                  crash(OC_INVALID_HEX);
+                  crash(OC_INVALID_INPUT);
                 }
               } else {
                 n_tokens--;
@@ -432,21 +440,21 @@ read_input(const char* filepath,
             case '\t': break;
             default: {
               if (input[cursor] & 0b10000000U)
-                crash(OC_NON_ASCII_CHAR);
+                crash(OC_INVALID_INPUT);
 
               if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
                 if (cursor == size)
-                  crash(OC_INVALID_HEX);
+                  crash(OC_INVALID_INPUT);
 
                 cursor++;
 
                 if (input[cursor] & 0b10000000U)
-                  crash(OC_NON_ASCII_CHAR);
+                  crash(OC_INVALID_INPUT);
 
                 if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
                   n_tokens--;
                 } else {
-                  crash(OC_INVALID_HEX);
+                  crash(OC_INVALID_INPUT);
                 }
               } else {
                 n_tokens--;
@@ -466,7 +474,7 @@ read_input(const char* filepath,
         if (stack_head == STACK_LIMIT)
           crash(OC_STACK_OVERFLOW);
         if (input[cursor] & 0b10000000U)
-          crash(OC_NON_ASCII_CHAR);
+          crash(OC_INVALID_INPUT);
 
         if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
           unsigned char leading = input[cursor] - '0';
@@ -474,9 +482,9 @@ read_input(const char* filepath,
             leading -= 7U;
 
           if (cursor == size)
-            crash(OC_INVALID_HEX);
+            crash(OC_INVALID_INPUT);
           if (input[cursor] & 0b10000000U)
-            crash(OC_NON_ASCII_CHAR);
+            crash(OC_INVALID_INPUT);
 
           cursor++;
 
@@ -489,23 +497,23 @@ read_input(const char* filepath,
             stack[stack_head++] = (leading << 4U) | following;
 
           } else
-            crash(OC_INVALID_HEX);
+            crash(OC_INVALID_INPUT);
 
         } else
           stack[stack_head++] = (unsigned char)input[cursor++];
       }
     }
     if (print_stack_steps == (_Bool)1) {
-      put("\n|");
+      print_cstring("\n|");
       print_stack(stack, stack_head);
-      put("|");
+      print_cstring("|");
     }
   }
-  if (print_stack_steps != (_Bool)1) {
-    put("\n|");
-    print_stack(stack, stack_head);
-    put("|\n");
-  }
+  // if (print_stack_steps != (_Bool)1) {
+  //   print_cstring("\n|");
+  //   print_stack(stack, stack_head);
+  //   print_cstring("|\n");
+  // }
 }
 
 int
@@ -524,21 +532,21 @@ main(int argc, char** argv, char** envp)
 
   for (int i = 2; i < argc; i++) {
     // turn all debug switches
-    if (cstring_compare(argv[i], "-d")) {
+    if (compare_cstring(argv[i], "d")) {
       print_stack_steps = (_Bool)1;
       catch_infinite_recursion = (_Bool)1;
 
     // turn on stack step printing
-    } else if (cstring_compare(argv[i], "-s")) {
+    } else if (compare_cstring(argv[i], "s")) {
       print_stack_steps = (_Bool)1;
 
     // turn off stack step printing
-    } else if (cstring_compare(argv[i], "-ns")) {
+    } else if (compare_cstring(argv[i], "ns")) {
       print_stack_steps = (_Bool)0;
 
     // EXPERIMENTAL: try to catch rewinds that don't change state of stack
     // and thus are most likely infinitely looped
-    } else if (cstring_compare(argv[i], "-l")) {
+    } else if (compare_cstring(argv[i], "l")) {
       catch_infinite_recursion = (_Bool)1;
     }
   }

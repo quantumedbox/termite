@@ -15,11 +15,6 @@ Proposals and ideas for the Termite programing language and its development envi
       as change of composition within bodies could quickly destroy everything, as previously inserted jumps do not act the same anymore
 
 
-- Compiler
-  It's more than possible to assemble termite code pieces into binary, without need to feed and interpret it by external program
-  Easy architecture allows to make it quite easily
-
-
 - Make portable interpreter
   Originally one of the goals was to make it as independent as possible, but it did harm
   relative to portability, interpreter could be compiled strictly against MinGW under Windows
@@ -28,4 +23,17 @@ Proposals and ideas for the Termite programing language and its development envi
   Under Linux IO functionalities might be achieved by syscalls without even need to link against anything
 
 
+- Compiler
+  It's more than possible to assemble termite code pieces into binary, without need to feed and interpret it by external program
+  Easy architecture allows to make it quite easily
+
+
 - Ditch . (drop) operator as its functionality might be achieved with @=~[ sequence
+  It's rather rarely used and could be substituted by using preprocessor rather quickly
+  On the other hand it could drastically increase the average size of programs
+
+
+- Is % terminator essential?
+  It's possible to assume that last value on stack when needle reaches out of bounds is return code, then for termination program should make itself go out of bounds
+
+  Also this will require to have explicit return value in every program
