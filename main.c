@@ -35,25 +35,16 @@ static const char zero_division[]     = "\n!division by zero";
 
 static _Bool print_as_hex = (_Bool)0; // todo: i don't want it in global scope, should be on stack
 
-static _Bool cstring_compare(const char* first, const char* second) {
-  while ((*first != '\0') && (*second != '\0')) {
-    if (*first != *second)
-      return (_Bool)0;
-    first++;
-    second++;
-  }
-  return (_Bool)1;
-}
-
-static void print(const char* msg, unsigned int len) {
+static void
+print(const char* msg, unsigned int len)
+{
   DWORD chars_written;
   (void)WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), msg, len, &chars_written, NULL);
   (void)chars_written;
 }
 
 static void
-print_value_custom(unsigned char ch,
-                   _Bool as_hex)
+print_value_custom(unsigned char ch, _Bool as_hex)
 {
   if (!as_hex) {
     print((const char*)&ch, 1U);
@@ -72,8 +63,7 @@ print_value(unsigned char ch)
 }
 
 static void
-print_stack(unsigned char* chars,
-            unsigned int len)
+print_stack(unsigned char* chars, unsigned int len)
 {
   const char space = ' ';
   for (unsigned int i = 0U; i < len; i++) {
@@ -93,12 +83,16 @@ print_stack(unsigned char* chars,
     print(unpack_str(msg_impl)); \
   } while (0)
 
-static _Noreturn void crash(const char* msg, unsigned int len) {
+static _Noreturn void
+crash(const char* msg, unsigned int len)
+{
   print(msg, len);
   ExitProcess(1L);
 }
 
-static void read(char* msg, unsigned int limit, unsigned int* read) {
+static void
+read(char* restrict msg, unsigned int limit, unsigned int* restrict read)
+{
   DWORD chars_read;
   if (ReadFile(GetStdHandle(STD_INPUT_HANDLE), msg, limit, &chars_read, NULL) == (BOOL)0) {
     *read = 0U;
@@ -116,6 +110,18 @@ value_array_compare(unsigned char* restrict first, unsigned int first_len,
   for (unsigned int i = 0U; i < first_len; i++) {
     if (*first != *second)
       return (_Bool)0;
+  }
+  return (_Bool)1;
+}
+
+static _Bool
+cstring_compare(const char* restrict first, const char* restrict second)
+{
+  while ((*first != '\0') && (*second != '\0')) {
+    if (*first != *second)
+      return (_Bool)0;
+    first++;
+    second++;
   }
   return (_Bool)1;
 }
