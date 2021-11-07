@@ -11,7 +11,7 @@ Proposals and ideas for the Termite programing language and its development envi
       which eliminates need to put "magic strings" by yourself
 
     . Labels
-      Currently it's extremely dangerous and unhandy to write even simple complex flows
+      Currently it's extremely dangerous and unhandy to write even simple flows
       as change of composition within bodies could quickly destroy everything, as previously inserted jumps do not act the same anymore
 
 
