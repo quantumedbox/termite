@@ -3,7 +3,8 @@
 // todo: make all strings null terminated?
 // todo: hex printing switch
 // todo: catch inanimately conveyoring loops
-// todo: make switches without '-' leading
+// todo: make switches without '-' leading?
+// todo: make argument line interface for passing data as initial stack state
 
 typedef void*         HANDLE;
 typedef const void*   LPCVOID;
@@ -25,13 +26,26 @@ extern HANDLE __stdcall GetStdHandle(DWORD nStdHandle);
 #define unpack_str(str) str, (sizeof(str) - 1ULL)
 
 // todo: follow minimalism even in error reporting
-static const char input_overflow[]    = "\n!input limit exceeded";
-static const char stack_overflow[]    = "\n!stack limit exceeded";
-static const char input_exhausted[]   = "\n!input exhausted";
-static const char stack_exhausted[]   = "\n!stack exhausted";
-static const char non_ascii_char[]    = "\n!on ASCII char encountered";
-static const char invalid_hex_value[] = "\n!ill-formed hex value";
-static const char zero_division[]     = "\n!division by zero";
+// static const char input_overflow[]    = "\n!input limit exceeded";
+// static const char stack_overflow[]    = "\n!stack limit exceeded";
+// static const char input_exhausted[]   = "\n!input exhausted";
+// static const char stack_exhausted[]   = "\n!stack exhausted";
+// static const char non_ascii_char[]    = "\n!on ASCII char encountered";
+// static const char invalid_hex_value[] = "\n!ill-formed hex value";
+// static const char zero_division[]     = "\n!division by zero";
+// static const char infinite_loop[]     = "\n!infinite recursion";
+
+enum OutputCodes {
+  OC_OK,
+  OC_INPUT_OVERFLOW,
+  OC_STACK_OVERFLOW,
+  OC_INPUT_EXHAUSTED,
+  OC_STACK_EXHAUSTED,
+  OC_NON_ASCII_CHAR,
+  OC_INVALID_HEX,
+  OC_ZERO_DIVISION,
+  OC_INFINITE_LOOP,
+};
 
 static _Bool print_as_hex = (_Bool)0; // todo: i don't want it in global scope, should be on stack
 
@@ -84,10 +98,9 @@ print_stack(unsigned char* chars, unsigned int len)
   } while (0)
 
 static _Noreturn void
-crash(const char* msg, unsigned int len)
+crash(unsigned char code)
 {
-  print(msg, len);
-  ExitProcess(1L);
+  ExitProcess((long)code);
 }
 
 static void
@@ -134,7 +147,7 @@ read_input(_Bool print_stack_steps,
   unsigned int size;
   read(input, INPUT_LIMIT, &size);
   if (size == INPUT_LIMIT + 1U) {
-    crash(unpack_str(input_overflow));
+    crash(OC_INPUT_OVERFLOW);
   }
 
   unsigned char stack[STACK_LIMIT];
@@ -162,7 +175,7 @@ read_input(_Bool print_stack_steps,
       // drop value from stack
       case '.': {
         if (stack_head == 0U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
         stack_head--;
         cursor++;
         break;
@@ -171,9 +184,9 @@ read_input(_Bool print_stack_steps,
       // duplicate last value on stack
       case '@': {
         if (stack_head == STACK_LIMIT)
-          crash(unpack_str(stack_overflow));
+          crash(OC_STACK_OVERFLOW);
         if (stack_head == 0U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
         stack[stack_head] = stack[stack_head - 1U];
         stack_head++;
         cursor++;
@@ -183,7 +196,7 @@ read_input(_Bool print_stack_steps,
       // swap two last values on stack
       case '^': {
         if (stack_head < 2U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
         unsigned char buff = stack[stack_head - 1U];
         stack[stack_head - 1U] = stack[stack_head - 2U];
         stack[stack_head - 2U] = buff;
@@ -229,7 +242,7 @@ read_input(_Bool print_stack_steps,
       // todo: replace with proper bitwise operators?
       case '~': {
         if (stack_head == 0U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 1U] ^= 1U;
         cursor++;
         break;
@@ -238,7 +251,7 @@ read_input(_Bool print_stack_steps,
       // compare two stack values, consume them and push 1 or 0 depending on whether they're equal
       case '=': {
         if (stack_head < 2U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 2U] = stack[stack_head - 2U] == stack[stack_head - 1U];
         stack_head--;
         cursor++;
@@ -249,7 +262,7 @@ read_input(_Bool print_stack_steps,
       // if last is bigger than next then 0, otherwise 1
       case '?': {
         if (stack_head < 2U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 2U] = stack[stack_head - 2U] < stack[stack_head - 1U];
         stack_head--;
         cursor++;
@@ -260,7 +273,7 @@ read_input(_Bool print_stack_steps,
       case '+': {
         // todo: define behaviour of overflow
         if (stack_head < 2U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 2U] = stack[stack_head - 2U] + stack[stack_head - 1U];
         stack_head--;
         cursor++;
@@ -272,7 +285,7 @@ read_input(_Bool print_stack_steps,
       case '-': {
         // todo: define behaviour of overflow
         if (stack_head < 2U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 2U] = stack[stack_head - 2U] - stack[stack_head - 1U];
         stack_head--;
         cursor++;
@@ -283,7 +296,7 @@ read_input(_Bool print_stack_steps,
       case '*': {
         // todo: define behaviour of overflow
         if (stack_head < 2U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 2U] = stack[stack_head - 2U] * stack[stack_head - 1U];
         stack_head--;
         cursor++;
@@ -295,9 +308,9 @@ read_input(_Bool print_stack_steps,
       case '/': {
         // todo: define behaviour of overflow
         if (stack_head < 2U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
         if (stack[stack_head - 1U] == 0U) {
-          crash(unpack_str(zero_division));
+          crash(OC_ZERO_DIVISION);
           break;
         }
         stack[stack_head - 2U] = stack[stack_head - 2U] / stack[stack_head - 1U];
@@ -309,7 +322,7 @@ read_input(_Bool print_stack_steps,
       // pop from stack and print
       case '<': {
         if (stack_head == 0U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
         if (print_stack_steps)
           put("\n");
         print_value(stack[stack_head - 1U]);
@@ -321,14 +334,14 @@ read_input(_Bool print_stack_steps,
       // push single token from stdin
       case '>': {
         if (stack_head == STACK_LIMIT)
-          crash(unpack_str(stack_overflow));
+          crash(OC_STACK_OVERFLOW);
 
         char token[2];
         unsigned int chars_read;
         read(token, 2U, &chars_read);
 
         if (token[0] & 0b10000000U)
-          crash(unpack_str(non_ascii_char));
+          crash(OC_NON_ASCII_CHAR);
 
         if ((token[0] >= 'A' && token[0] <= 'F') || (token[0] >= '0' && token[0] <= '9')) {
           unsigned char leading = token[0] - '0';
@@ -336,9 +349,9 @@ read_input(_Bool print_stack_steps,
             leading -= 7U;
 
           if (chars_read != 2U)
-            crash(unpack_str(invalid_hex_value));
+            crash(OC_INVALID_HEX);
           if (token[1] & 0b10000000U)
-            crash(unpack_str(non_ascii_char));
+            crash(OC_NON_ASCII_CHAR);
 
           if ((token[1] >= 'A' && token[1] <= 'F') || (token[1] >= '0' && token[1] <= '9')) {
             unsigned char following = token[1] - '0';
@@ -348,7 +361,7 @@ read_input(_Bool print_stack_steps,
             stack[stack_head++] = (leading << 4U) | following;
 
           } else
-            crash(unpack_str(invalid_hex_value));
+            crash(OC_INVALID_HEX);
 
         } else
           stack[stack_head++] = (unsigned char)token[0];
@@ -360,7 +373,7 @@ read_input(_Bool print_stack_steps,
       // pop from stack and rewind N tokens back
       case '[': {
         if (stack_head == 0U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
 
         unsigned char n_tokens = stack[stack_head - 1U];
         stack_head--;
@@ -368,9 +381,9 @@ read_input(_Bool print_stack_steps,
         if (catch_infinite_recursion) {
           if (shadow_stack_rewinded_with != 0U) {
             if (value_array_compare(shadow_stack, shadow_stack_len, stack, stack_head)) {
-                put("\n! HALT ON INFINITE RECURSION !");
-                cursor = size;
-                break;
+                crash(OC_INFINITE_LOOP);
+                // cursor = size;
+                // break;
               }
           }
           shadow_stack_rewinded_with = n_tokens;
@@ -394,21 +407,21 @@ read_input(_Bool print_stack_steps,
             case '\t': break;
             default: {
               if (input[cursor] & 0b10000000U)
-                crash(unpack_str(non_ascii_char));
+                crash(OC_NON_ASCII_CHAR);
 
               if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
                 if (cursor == 0U)
-                  crash(unpack_str(invalid_hex_value));
+                  crash(OC_INVALID_HEX);
 
                 cursor--;
 
                 if (input[cursor] & 0b10000000U)
-                  crash(unpack_str(non_ascii_char));
+                  crash(OC_NON_ASCII_CHAR);
 
                 if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
                   n_tokens--;
                 } else {
-                  crash(unpack_str(invalid_hex_value));
+                  crash(OC_INVALID_HEX);
                 }
               } else {
                 n_tokens--;
@@ -417,7 +430,7 @@ read_input(_Bool print_stack_steps,
           }
 
           if ((cursor == 0U) && (n_tokens != 0U))
-            crash(unpack_str(input_exhausted));
+            crash(OC_INPUT_EXHAUSTED);
           else if (n_tokens != 0U)
             cursor--;
         }
@@ -427,7 +440,7 @@ read_input(_Bool print_stack_steps,
       // pop from stack and seek N tokens forward
       case ']': {
         if (stack_head == 0U)
-          crash(unpack_str(stack_exhausted));
+          crash(OC_STACK_EXHAUSTED);
 
         unsigned char n_tokens = stack[stack_head - 1U];
         stack_head--;
@@ -435,7 +448,7 @@ read_input(_Bool print_stack_steps,
 
         while (n_tokens != 0U) {
           if (cursor == size)
-            crash(unpack_str(input_exhausted));
+            crash(OC_INPUT_EXHAUSTED);
 
           switch (input[cursor]) {
             case  ' ':
@@ -444,21 +457,21 @@ read_input(_Bool print_stack_steps,
             case '\t': break;
             default: {
               if (input[cursor] & 0b10000000U)
-                crash(unpack_str(non_ascii_char));
+                crash(OC_NON_ASCII_CHAR);
 
               if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
                 if (cursor == size)
-                  crash(unpack_str(invalid_hex_value));
+                  crash(OC_INVALID_HEX);
 
                 cursor++;
 
                 if (input[cursor] & 0b10000000U)
-                  crash(unpack_str(non_ascii_char));
+                  crash(OC_NON_ASCII_CHAR);
 
                 if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
                   n_tokens--;
                 } else {
-                  crash(unpack_str(invalid_hex_value));
+                  crash(OC_INVALID_HEX);
                 }
               } else {
                 n_tokens--;
@@ -467,7 +480,7 @@ read_input(_Bool print_stack_steps,
           }
 
           if ((cursor == size) && (n_tokens != 0U))
-            crash(unpack_str(input_exhausted));
+            crash(OC_INPUT_EXHAUSTED);
           cursor++;
         }
         break;
@@ -476,9 +489,9 @@ read_input(_Bool print_stack_steps,
       // otherwise push it as character or hex value
       default: {
         if (stack_head == STACK_LIMIT)
-          crash(unpack_str(stack_overflow));
+          crash(OC_STACK_OVERFLOW);
         if (input[cursor] & 0b10000000U)
-          crash(unpack_str(non_ascii_char));
+          crash(OC_NON_ASCII_CHAR);
 
         if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
           unsigned char leading = input[cursor] - '0';
@@ -486,9 +499,9 @@ read_input(_Bool print_stack_steps,
             leading -= 7U;
 
           if (cursor == size)
-            crash(unpack_str(invalid_hex_value));
+            crash(OC_INVALID_HEX);
           if (input[cursor] & 0b10000000U)
-            crash(unpack_str(non_ascii_char));
+            crash(OC_NON_ASCII_CHAR);
 
           cursor++;
 
@@ -501,7 +514,7 @@ read_input(_Bool print_stack_steps,
             stack[stack_head++] = (leading << 4U) | following;
 
           } else
-            crash(unpack_str(invalid_hex_value));
+            crash(OC_INVALID_HEX);
 
         } else
           stack[stack_head++] = (unsigned char)input[cursor++];
@@ -520,7 +533,9 @@ read_input(_Bool print_stack_steps,
   }
 }
 
-int main(int argc, char** argv, char** envp) {
+int
+main(int argc, char** argv, char** envp)
+{
   (void)argc;
   (void)argv;
   (void)envp;
@@ -554,4 +569,5 @@ int main(int argc, char** argv, char** envp) {
   }
 
   read_input(print_stack_steps, catch_infinite_recursion);
+  return 0;
 }

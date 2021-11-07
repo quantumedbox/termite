@@ -7,6 +7,7 @@ Basic structural element of every program is token, there's 3 kinds of them:
 
 Available operators:
     < Output    : Pop value and output it to STDOUT
+    > Input     : Wait for input from STDIN, parse it as token and then push to stack
     . Drop      : Deletes last value from the stack
     @ Duplicate : Clones last value on the stack
     ^ Swap      : Swaps two last values
@@ -18,6 +19,7 @@ Available operators:
     * Multiply  : Pops two values, pushes result of multiplication
     / Divide    : Pops two values, pushes result of division
     # Conveyor  : Moves last value into beginning of stack
+    $ Ronveyor  : Moves first value to the end of stack
     ] Seek      : Pops N value, seeks N tokens forward
     [ Rewind    : Pops N value, rewinds N tokens back
 
