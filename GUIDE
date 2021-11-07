@@ -1,0 +1,30 @@
+Language is deliberately minimalist and doesn't implement anything
+  that couldn't be expressed by combinations of more basic commands
+
+
+Some compound operators:
+
+  . Over
+    a b
+    #@$^
+    |a b a|
+
+  . Double over
+    a b
+    ^@#^@$^
+    |a b a b|
+
+  . Rot
+    a b c
+    #^$^
+    |b c a|
+
+  . Mod
+    08 03
+    #@$@#/$*-
+    |02|
+
+  . /Mod
+    05 02
+    ^@#^@$^/##@$@#/$*-$^
+    |02 01|
