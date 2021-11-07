@@ -7,7 +7,7 @@ Basic structural element of every program is token, there's 3 kinds of them:
 
 Available operators:
     < Output    : Pop value and output it to STDOUT
-    > Input     : Wait for input from STDIN, parse it as token and then push to stack
+    > Input     : Wait for single byte from STDIN, push it on stack
     . Drop      : Deletes last value from the stack
     @ Duplicate : Clones last value on the stack
     ^ Swap      : Swaps two last values
@@ -22,6 +22,7 @@ Available operators:
     $ Ronveyor  : Moves first value to the end of stack
     ] Seek      : Pops N value, seeks N tokens forward
     [ Rewind    : Pops N value, rewinds N tokens back
+    % Termintor : Pops value and returns it as return code of application
 
 Restrictions:
     . Stack limit is 66560
@@ -29,8 +30,7 @@ Restrictions:
 
 Switches:
 Usage: termite.exe -d ...
-    -d  : Debug mode
+    -d  : Debug mode, includes stack stepping and infloop catching
     -s  : Turn on stack step printing
     -ns : Turn off stack step printing
     -l  : Experimental -- Capture state of rewind and terminate program if stack is identical each time i.e. leads to infinite recursion
-    -h  : Output everything as hex

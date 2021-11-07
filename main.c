@@ -1,39 +1,27 @@
 #include "nocrt0/nocrt0c.c"
 
+#ifdef __WIN32
+  #include "win.h"
+#else
+  #error "currently only windows is supported"
+#endif
+
 // todo: make all strings null terminated?
-// todo: hex printing switch
-// todo: catch inanimately conveyoring loops
+// todo: catch infinitely conveyoring loops
 // todo: make switches without '-' leading?
 // todo: make argument line interface for passing data as initial stack state
+// tood: generic function for reading tokens
+// todo: redo 'put' macro into 'cprint' that prints any NULL terminated strings
+// todo: make OS independent realizations of IO, use only generics here
+// todo: operator for checking if STDIN is at EOF ? or make > return pair of values, one signaling EOF and other - value itself
+//       additionally, what about making value output of > on EOF undefined random value?
+//       could be an interesting source of randomness
+// todo: restrict file names to 128 specifically
 
-typedef void*         HANDLE;
-typedef const void*   LPCVOID;
-typedef unsigned long DWORD;
-typedef DWORD*        LPDWORD;
-typedef int           BOOL;
-
-// overlapped structure is left as void* as we will not use it in any way as console output couldn't be async
-extern BOOL   __stdcall WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, void* lpOverlapped);
-extern BOOL   __stdcall ReadFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, void* lpOverlapped);
-extern HANDLE __stdcall GetStdHandle(DWORD nStdHandle);
-
-#define STD_INPUT_HANDLE ((DWORD)-10)
-#define STD_OUTPUT_HANDLE ((DWORD)-11)
-
-#define INPUT_LIMIT 66560U // 65k
-#define STACK_LIMIT 66560U // 65k
+#define INPUT_LIMIT 66560U // 65KB
+#define STACK_LIMIT 66560U // 65KB
 
 #define unpack_str(str) str, (sizeof(str) - 1ULL)
-
-// todo: follow minimalism even in error reporting
-// static const char input_overflow[]    = "\n!input limit exceeded";
-// static const char stack_overflow[]    = "\n!stack limit exceeded";
-// static const char input_exhausted[]   = "\n!input exhausted";
-// static const char stack_exhausted[]   = "\n!stack exhausted";
-// static const char non_ascii_char[]    = "\n!on ASCII char encountered";
-// static const char invalid_hex_value[] = "\n!ill-formed hex value";
-// static const char zero_division[]     = "\n!division by zero";
-// static const char infinite_loop[]     = "\n!infinite recursion";
 
 enum OutputCodes {
   OC_OK,
@@ -41,13 +29,15 @@ enum OutputCodes {
   OC_STACK_OVERFLOW,
   OC_INPUT_EXHAUSTED,
   OC_STACK_EXHAUSTED,
-  OC_NON_ASCII_CHAR,
+  OC_NON_ASCII_CHAR, // todo: combine non-ascii and invalid hex into one error? "invalid token" for example
   OC_INVALID_HEX,
   OC_ZERO_DIVISION,
   OC_INFINITE_LOOP,
-};
 
-static _Bool print_as_hex = (_Bool)0; // todo: i don't want it in global scope, should be on stack
+  OC_FILE_ERROR = 0x10, // todo: make it generic 'IO error'?
+
+  OC_LAST_RESERVED = 0x1F // 32 values are reserved for termite status exits, other values are free to use
+};
 
 static void
 print(const char* msg, unsigned int len)
@@ -58,22 +48,9 @@ print(const char* msg, unsigned int len)
 }
 
 static void
-print_value_custom(unsigned char ch, _Bool as_hex)
-{
-  if (!as_hex) {
-    print((const char*)&ch, 1U);
-  } else {
-    char values[2] = {(ch & 0xF0) >> 4, ch & 0x0F};
-    values[0] += values[0] > 0x9 ? 55 : 48;
-    values[1] += values[1] > 0x9 ? 55 : 48;
-    print((const char*)values, sizeof(values));
-  }
-}
-
-static void
 print_value(unsigned char ch)
 {
-  print_value_custom(ch, print_as_hex);
+  print((const char*)&ch, 1U);
 }
 
 static void
@@ -81,10 +58,7 @@ print_stack(unsigned char* chars, unsigned int len)
 {
   const char space = ' ';
   for (unsigned int i = 0U; i < len; i++) {
-    if (chars[i] < 0x20 || print_as_hex)
-      print_value_custom(chars[i], (_Bool)1);
-    else
-      print_value_custom(chars[i], (_Bool)0);
+    print_value(chars[i]);
 
     if (i != len - 1U)
       print(&space, 1U);
@@ -103,15 +77,17 @@ crash(unsigned char code)
   ExitProcess((long)code);
 }
 
-static void
-read(char* restrict msg, unsigned int limit, unsigned int* restrict read)
+// returns 0 on read error, 1 otherwise
+static _Bool
+read(HANDLE hFile, char* restrict buff, unsigned int limit, unsigned int* restrict read_result)
 {
   DWORD chars_read;
-  if (ReadFile(GetStdHandle(STD_INPUT_HANDLE), msg, limit, &chars_read, NULL) == (BOOL)0) {
-    *read = 0U;
-  } else {
-    *read = (unsigned int)chars_read;
+  if (ReadFile(hFile, buff, limit, &chars_read, NULL) == (BOOL)0) {
+    *read_result = 0U; // todo: is it necessary?
+    return (_Bool)0;
   }
+  *read_result = (unsigned int)chars_read;
+  return (_Bool)1;
 }
 
 static _Bool
@@ -140,14 +116,27 @@ cstring_compare(const char* restrict first, const char* restrict second)
 }
 
 static void
-read_input(_Bool print_stack_steps,
+read_input(const char* filepath,
+           _Bool print_stack_steps,
            _Bool catch_infinite_recursion)
 {
   char input[INPUT_LIMIT + 1U];
   unsigned int size;
-  read(input, INPUT_LIMIT, &size);
-  if (size == INPUT_LIMIT + 1U) {
-    crash(OC_INPUT_OVERFLOW);
+  {
+    OFSTRUCT file_struct;
+    HFILE file = OpenFile(filepath, &file_struct, OF_READ);
+    if (file == HFILE_ERROR)
+      crash(OC_FILE_ERROR);
+
+    if (!read((HANDLE)file, input, INPUT_LIMIT, &size))
+      crash(OC_FILE_ERROR);
+
+    if (size == INPUT_LIMIT + 1U) {
+      crash(OC_INPUT_OVERFLOW);
+    }
+
+    if (CloseHandle((HANDLE)file) == 0)
+      crash(OC_FILE_ERROR);
   }
 
   unsigned char stack[STACK_LIMIT];
@@ -171,6 +160,16 @@ read_input(_Bool print_stack_steps,
       case '\n':
       case '\r':
       case '\t': cursor++; continue;
+
+      // pop value from stack and return it as exit code
+      // this effectively terminates the program in predictable manner
+      case '%': {
+        if (stack_head == 0U)
+          crash(OC_STACK_EXHAUSTED);
+
+        crash(stack[stack_head - 1U]);
+        break;
+      }
 
       // drop value from stack
       case '.': {
@@ -331,41 +330,17 @@ read_input(_Bool print_stack_steps,
         break;
       }
 
-      // push single token from stdin
+      // push single byte from stdin into stack
       case '>': {
         if (stack_head == STACK_LIMIT)
           crash(OC_STACK_OVERFLOW);
 
-        char token[2];
+        char token;
         unsigned int chars_read;
-        read(token, 2U, &chars_read);
+        if (!read(GetStdHandle(STD_INPUT_HANDLE), &token, 1U, &chars_read))
+          crash(OC_FILE_ERROR);
 
-        if (token[0] & 0b10000000U)
-          crash(OC_NON_ASCII_CHAR);
-
-        if ((token[0] >= 'A' && token[0] <= 'F') || (token[0] >= '0' && token[0] <= '9')) {
-          unsigned char leading = token[0] - '0';
-          if (leading > 9U)
-            leading -= 7U;
-
-          if (chars_read != 2U)
-            crash(OC_INVALID_HEX);
-          if (token[1] & 0b10000000U)
-            crash(OC_NON_ASCII_CHAR);
-
-          if ((token[1] >= 'A' && token[1] <= 'F') || (token[1] >= '0' && token[1] <= '9')) {
-            unsigned char following = token[1] - '0';
-            if (following > 9U)
-              following -= 7U;
-
-            stack[stack_head++] = (leading << 4U) | following;
-
-          } else
-            crash(OC_INVALID_HEX);
-
-        } else
-          stack[stack_head++] = (unsigned char)token[0];
-
+        stack[stack_head++] = (unsigned char)token;
         cursor++;
         break;
       }
@@ -540,10 +515,14 @@ main(int argc, char** argv, char** envp)
   (void)argv;
   (void)envp;
 
+  if (argc == 1)
+    return OC_FILE_ERROR; //no file given
+
+  const char* filepath = argv[1];
   _Bool print_stack_steps = (_Bool)0;
   _Bool catch_infinite_recursion = (_Bool)0;
 
-  for (int i = 0; i < argc; i++) {
+  for (int i = 2; i < argc; i++) {
     // turn all debug switches
     if (cstring_compare(argv[i], "-d")) {
       print_stack_steps = (_Bool)1;
@@ -557,10 +536,6 @@ main(int argc, char** argv, char** envp)
     } else if (cstring_compare(argv[i], "-ns")) {
       print_stack_steps = (_Bool)0;
 
-    // output characters in hex representation
-    } else if (cstring_compare(argv[i], "-h")) {
-      print_as_hex = (_Bool)1;
-
     // EXPERIMENTAL: try to catch rewinds that don't change state of stack
     // and thus are most likely infinitely looped
     } else if (cstring_compare(argv[i], "-l")) {
@@ -568,6 +543,6 @@ main(int argc, char** argv, char** envp)
     }
   }
 
-  read_input(print_stack_steps, catch_infinite_recursion);
-  return 0;
+  read_input(filepath, print_stack_steps, catch_infinite_recursion);
+  return OC_OK;
 }
