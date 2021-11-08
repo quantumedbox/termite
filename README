@@ -7,17 +7,17 @@ Basic structural element of every program is token, there's 3 kinds of them:
 
 Available operators:
     < Output    : Pop value and output it to STDOUT
-    > Input     : Tries to read single byte from STDIN and pushes two values: values first, then 01 if something was read or 00 if file is at EOF
+    > Input     : Tries to read single byte from STDIN and pushes two values: byte that was read, then 01 if something was read or 00 if file is at EOF
     . Drop      : Deletes last value from the stack
     @ Duplicate : Clones last value on the stack
     ^ Swap      : Swaps two last values
     ~ Not       : Toggles least significant bit
     = Equal     : Pops two values, pushes 01 if values are equal or 00 if not
-    ? Compare   : Pops two values, pushes 10 if last values was bigger, 00 otherwise
-    + Add       : Pops two values, pushes result of addition
-    - Subtract  : Pops two values, pushes result of subtraction
-    * Multiply  : Pops two values, pushes result of multiplication
-    / Divide    : Pops two values, pushes result of division
+    ? Compare   : Pops two values, pushes 10 if last values was bigger, 00 otherwise. equal to < in reverse polish notation
+    + Add       : Pops two values, pushes result of their addition, in reverse polish notation
+    - Subtract  : Pops two values, pushes result of their subtraction, in reverse polish notation
+    * Multiply  : Pops two values, pushes result of their multiplication, in reverse polish notation
+    / Divide    : Pops two values, pushes result of their division, in reverse polish notation
     # Conveyor  : Moves last value into beginning of stack
     $ Ronveyor  : Moves first value to the end of stack
     ] Seek      : Pops N value, seeks N tokens forward
@@ -32,5 +32,5 @@ Arguemnt switches:
 Usage: termite.exe d ns ...
     d  : Debug mode, includes stack stepping and infloop catching
     s  : Turn on stack step printing
-    ns : Turn off stack step printing
+    e  : Show stack on program exit
     l  : Experimental -- Capture state of rewind and terminate program if stack is identical each time i.e. leads to infinite recursion

@@ -6,14 +6,11 @@
   #error "currently only windows is supported"
 #endif
 
-// todo: make all strings null terminated?
 // todo: catch infinitely conveyoring loops
 // todo: make OS independent realizations of IO, use only generics here
-// todo: operator for checking if STDIN is at EOF ? or make > return pair of values, one signaling EOF and other - value itself
-//       additionally, what about making value output of > on EOF undefined random value?
-//       could be an interesting source of randomness
 // todo: restrict file names to 128 specifically, always check the size before hand
 // todo: clear STDIN after execution
+// todo: do not include sequential pushes in debug stack output
 
 #define INPUT_LIMIT 66560U // 65KB
 #define STACK_LIMIT 66560U // 65KB
@@ -72,12 +69,6 @@ print_cstring(const char* str) {
   print(str, count_cstring(str));
 }
 
-static _Noreturn void
-crash(unsigned char code)
-{
-  ExitProcess((long)code);
-}
-
 // returns 0 on read error, 1 otherwise
 static _Bool
 read(HANDLE hFile, char* restrict buff, unsigned int limit, unsigned int* restrict read_result)
@@ -116,28 +107,31 @@ compare_cstring(const char* restrict first, const char* restrict second)
   return (_Bool)1;
 }
 
-static void
+static int
 read_input(const char* filepath,
            _Bool print_stack_steps,
+           _Bool print_stack_on_exit,
            _Bool catch_infinite_recursion)
 {
+  int exit_code = 0;
+
   char input[INPUT_LIMIT + 1U];
   unsigned int size;
   {
     OFSTRUCT file_struct;
     HFILE file = OpenFile(filepath, &file_struct, OF_READ);
     if (file == HFILE_ERROR)
-      crash(OC_FILE_ERROR);
+      return OC_FILE_ERROR;
 
     if (!read((HANDLE)file, input, INPUT_LIMIT, &size))
-      crash(OC_FILE_ERROR);
+      return OC_FILE_ERROR;
 
     if (size == INPUT_LIMIT + 1U) {
-      crash(OC_INPUT_OVERFLOW);
+      return OC_INPUT_OVERFLOW;
     }
 
     if (CloseHandle((HANDLE)file) == 0)
-      crash(OC_FILE_ERROR);
+      return OC_FILE_ERROR;
   }
 
   unsigned char stack[STACK_LIMIT];
@@ -145,12 +139,18 @@ read_input(const char* filepath,
 
   // EXPERIMENTAL: required for checking of infinite loops on rewinds
   // todo: make it compile-time optional?
-  // todo: could be dangerous to just mul to 0, is such behavior even defined?
+  // todo: could be dangerous to just mul to 0
   unsigned char shadow_stack[STACK_LIMIT * catch_infinite_recursion];
   unsigned char shadow_stack_rewinded_with = 0U;
   unsigned int shadow_stack_len = 0U;
 
   unsigned int cursor = 0U;
+
+  #define crash(code) \
+    do { \
+      exit_code = code; \
+      goto EXIT_LOOP; \
+    } while (0)
 
   while (1) {
     if (cursor == size)
@@ -168,7 +168,8 @@ read_input(const char* filepath,
         if (stack_head == 0U)
           crash(OC_STACK_EXHAUSTED);
 
-        crash(stack[stack_head - 1U]);
+        stack_head--;
+        crash(stack[stack_head]);
         break;
       }
 
@@ -336,13 +337,13 @@ read_input(const char* filepath,
         if (stack_head == STACK_LIMIT - 1U)
           crash(OC_STACK_OVERFLOW);
 
-        char token;
+        char stdin_char;
         unsigned int chars_read;
-        if (!read(GetStdHandle(STD_INPUT_HANDLE), &token, 1U, &chars_read))
+        if (!read(GetStdHandle(STD_INPUT_HANDLE), &stdin_char, 1U, &chars_read))
           crash(OC_FILE_ERROR);
 
         if (chars_read != 0U) {
-          stack[stack_head++] = (unsigned char)token;
+          stack[stack_head++] = (unsigned char)stdin_char;
           stack[stack_head++] = 1U;
         } else {
           stack[stack_head++] = 0U; // todo: what about outputting random value here?
@@ -503,24 +504,27 @@ read_input(const char* filepath,
           stack[stack_head++] = (unsigned char)input[cursor++];
       }
     }
+    // todo: stack printing will mess with programs that rely on processing the output
+    //       we could probably somehow ensure that printed debug information is stripable
     if (print_stack_steps == (_Bool)1) {
       print_cstring("\n|");
       print_stack(stack, stack_head);
       print_cstring("|");
     }
   }
-  // if (print_stack_steps != (_Bool)1) {
-  //   print_cstring("\n|");
-  //   print_stack(stack, stack_head);
-  //   print_cstring("|\n");
-  // }
+
+EXIT_LOOP:
+  if (print_stack_on_exit == (_Bool)1 || print_stack_steps == (_Bool)1) {
+    print_cstring("\n|");
+    print_stack(stack, stack_head);
+    print_cstring("|");
+  }
+  return exit_code;
 }
 
 int
 main(int argc, char** argv, char** envp)
 {
-  (void)argc;
-  (void)argv;
   (void)envp;
 
   if (argc == 1)
@@ -528,6 +532,7 @@ main(int argc, char** argv, char** envp)
 
   const char* filepath = argv[1];
   _Bool print_stack_steps = (_Bool)0;
+  _Bool print_stack_on_exit = (_Bool)0;
   _Bool catch_infinite_recursion = (_Bool)0;
 
   for (int i = 2; i < argc; i++) {
@@ -535,14 +540,15 @@ main(int argc, char** argv, char** envp)
     if (compare_cstring(argv[i], "d")) {
       print_stack_steps = (_Bool)1;
       catch_infinite_recursion = (_Bool)1;
+      // print_stack_on_exit = (_Bool)1;
 
     // turn on stack step printing
     } else if (compare_cstring(argv[i], "s")) {
       print_stack_steps = (_Bool)1;
 
-    // turn off stack step printing
-    } else if (compare_cstring(argv[i], "ns")) {
-      print_stack_steps = (_Bool)0;
+    // show state of stack on program exit
+    } else if (compare_cstring(argv[i], "e")) {
+      print_stack_on_exit = (_Bool)1;
 
     // EXPERIMENTAL: try to catch rewinds that don't change state of stack
     // and thus are most likely infinitely looped
@@ -551,6 +557,11 @@ main(int argc, char** argv, char** envp)
     }
   }
 
-  read_input(filepath, print_stack_steps, catch_infinite_recursion);
-  return OC_OK;
+  return
+    read_input(
+      filepath,
+      print_stack_steps,
+      print_stack_on_exit,
+      catch_infinite_recursion
+    );
 }

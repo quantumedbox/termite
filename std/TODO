@@ -1,0 +1,24 @@
+Ideas for shared standard programs that are useful
+
+- Stripper
+  Recieve stream of termite code and strip all whitespace to make it compressed
+  Might be vital in size limited code
+
+- Token count
+  Could be vital in termite programs that operate on termite code sequences
+
+- Apply
+  Applying of termite magic string invocation for every byte in input
+
+- String functions
+  NULL terminated strings are more than possible to work in such environment
+  We should get commonly used functions for them such as:
+
+    . len
+    . compare
+    . append
+
+    and others
+
+- Short arithmetic
+  Compose short values from two bytes and implement arithmetic operators for them
