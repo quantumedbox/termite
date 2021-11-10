@@ -12,6 +12,7 @@
 // todo: clear STDIN after execution
 // todo: do not include sequential pushes in debug stack output
 // todo: make inserted newline on stack printing consistent
+// todo: show some debugging hints about jumps
 
 static int
 read_input(const char* filepath,
