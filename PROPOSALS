@@ -14,6 +14,15 @@ Proposals and ideas for the Termite programing language and its development envi
       Currently it's extremely dangerous and unhandy to write even simple flows
       as change of composition within bodies could quickly destroy everything, as previously inserted jumps do not act the same anymore
 
+    . Comments
+      Termite has no concept of comments, everything given is considered to be equally important
+      Preprocessor can strip unnecessary for execution, but useful for users parts
+
+
+- Bytecode operating interpreter
+  Currently every operation is performed on input stream directly without any preprocessing
+  It might produce quite noticeable overhead in programs that uses jumps a lot
+
 
 - Make portable interpreter
   Originally one of the goals was to make it as independent as possible, but it did harm

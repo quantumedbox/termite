@@ -1,3 +1,6 @@
+#ifndef WIN_H
+#define WIN_H
+
 typedef void*           HANDLE;
 typedef int             HFILE;
 typedef const void*     LPCVOID;
@@ -33,3 +36,28 @@ extern BOOL   __stdcall CloseHandle(HANDLE hObject);
 
 #define STD_INPUT_HANDLE ((DWORD)-10)
 #define STD_OUTPUT_HANDLE ((DWORD)-11)
+
+
+typedef HANDLE TermiteHandle;
+#define stdin GetStdHandle(STD_INPUT_HANDLE)
+
+
+void
+print(const char* msg, unsigned int len);
+
+// returns 0 on file opening error, 1 otherwise
+_Bool
+open_file(const char* path, TermiteHandle* result);
+
+// returns 0 on file opening error, 1 otherwise
+_Bool
+close_file(TermiteHandle hFile);
+
+// returns 0 on read error, 1 otherwise
+_Bool
+read_file(TermiteHandle hFile,
+          char* restrict buff,
+          unsigned int limit,
+          unsigned int* restrict read_result);
+
+#endif

@@ -1,10 +1,5 @@
-#include "nocrt0/nocrt0c.c"
-
-#ifdef __WIN32
-  #include "win.h"
-#else
-  #error "currently only windows is supported"
-#endif
+#include "os.h"
+#include "common.h"
 
 // todo: catch infinitely conveyoring loops
 // todo: make OS independent realizations of IO, use only generics here
@@ -30,83 +25,6 @@ enum OutputCodes {
   OC_LAST_RESERVED = 0x1F // 32 values are reserved for termite status exits, other values are free to use
 };
 
-static void
-print(const char* msg, unsigned int len)
-{
-  DWORD chars_written;
-  (void)WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), msg, len, &chars_written, NULL);
-  (void)chars_written;
-}
-
-static void
-print_value(unsigned char ch)
-{
-  print((const char*)&ch, 1U);
-}
-
-static void
-print_stack(unsigned char* chars, unsigned int len)
-{
-  const char space = ' ';
-  for (unsigned int i = 0U; i < len; i++) {
-    print_value(chars[i]);
-
-    if (i != len - 1U)
-      print(&space, 1U);
-  }
-}
-
-static unsigned int
-count_cstring(const char* str) {
-  unsigned int len = 0U;
-  while (*str++ != '\0')
-    len++;
-  return len;
-}
-
-static void
-print_cstring(const char* str) {
-  print(str, count_cstring(str));
-}
-
-// returns 0 on read error, 1 otherwise
-static _Bool
-read(HANDLE hFile, char* restrict buff, unsigned int limit, unsigned int* restrict read_result)
-{
-  DWORD chars_read;
-  if (ReadFile(hFile, buff, limit, &chars_read, NULL) == (BOOL)0) {
-    *read_result = 0U; // todo: is it necessary?
-    return (_Bool)0;
-  }
-  *read_result = (unsigned int)chars_read;
-  return (_Bool)1;
-}
-
-static _Bool
-compare_value_array(unsigned char* restrict first, unsigned int first_len,
-                    unsigned char* restrict second, unsigned int second_len)
-{
-  if (first_len != second_len)
-    return (_Bool)0;
-  for (unsigned int i = 0U; i < first_len; i++) {
-    if (*first != *second)
-      return (_Bool)0;
-  }
-  return (_Bool)1;
-}
-
-static _Bool
-compare_cstring(const char* restrict first, const char* restrict second)
-{
-  while ((*first != '\0') && (*second != '\0')) {
-    if (*first != *second)
-      return (_Bool)0;
-    first++;
-    second++;
-  }
-  return (_Bool)1;
-}
-
 static int
 read_input(const char* filepath,
            _Bool print_stack_steps,
@@ -118,19 +36,20 @@ read_input(const char* filepath,
   char input[INPUT_LIMIT + 1U];
   unsigned int size;
   {
-    OFSTRUCT file_struct;
-    HFILE file = OpenFile(filepath, &file_struct, OF_READ);
-    if (file == HFILE_ERROR)
+    TermiteHandle file;
+    if (!open_file(filepath, &file))
       return OC_FILE_ERROR;
 
-    if (!read((HANDLE)file, input, INPUT_LIMIT, &size))
+    if (!read_file(file, input, INPUT_LIMIT, &size)) {
+      close_file(file);
       return OC_FILE_ERROR;
+    }
 
     if (size == INPUT_LIMIT + 1U) {
       return OC_INPUT_OVERFLOW;
     }
 
-    if (CloseHandle((HANDLE)file) == 0)
+    if (!close_file(file))
       return OC_FILE_ERROR;
   }
 
@@ -339,7 +258,7 @@ read_input(const char* filepath,
 
         char stdin_char;
         unsigned int chars_read;
-        if (!read(GetStdHandle(STD_INPUT_HANDLE), &stdin_char, 1U, &chars_read))
+        if (!read_file(stdin, &stdin_char, 1U, &chars_read))
           crash(OC_FILE_ERROR);
 
         if (chars_read != 0U) {
@@ -390,7 +309,7 @@ read_input(const char* filepath,
             case '\r':
             case '\t': break;
             default: {
-              if (input[cursor] & 0b10000000U)
+              if (input[cursor] & 0x80U)
                 crash(OC_INVALID_INPUT);
 
               if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
@@ -399,7 +318,7 @@ read_input(const char* filepath,
 
                 cursor--;
 
-                if (input[cursor] & 0b10000000U)
+                if (input[cursor] & 0x80)
                   crash(OC_INVALID_INPUT);
 
                 if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
@@ -440,7 +359,7 @@ read_input(const char* filepath,
             case '\r':
             case '\t': break;
             default: {
-              if (input[cursor] & 0b10000000U)
+              if (input[cursor] & 0x80)
                 crash(OC_INVALID_INPUT);
 
               if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
@@ -449,7 +368,7 @@ read_input(const char* filepath,
 
                 cursor++;
 
-                if (input[cursor] & 0b10000000U)
+                if (input[cursor] & 0x80)
                   crash(OC_INVALID_INPUT);
 
                 if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
@@ -474,7 +393,7 @@ read_input(const char* filepath,
       default: {
         if (stack_head == STACK_LIMIT)
           crash(OC_STACK_OVERFLOW);
-        if (input[cursor] & 0b10000000U)
+        if (input[cursor] & 0x80)
           crash(OC_INVALID_INPUT);
 
         if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
@@ -484,7 +403,7 @@ read_input(const char* filepath,
 
           if (cursor == size)
             crash(OC_INVALID_INPUT);
-          if (input[cursor] & 0b10000000U)
+          if (input[cursor] & 0x80)
             crash(OC_INVALID_INPUT);
 
           cursor++;
