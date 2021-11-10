@@ -1,3 +1,5 @@
+// todo: linux
+
 #ifdef __WIN32
   #include "win.h"
 #else

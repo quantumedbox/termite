@@ -1,10 +1,12 @@
 #include "os.h"
 #include "common.h"
 
+// todo: no need to call get_stdout() every time
+
 void
 print_value(unsigned char ch)
 {
-  print((const char*)&ch, 1U);
+  write_file(get_stdout(), (const char*)&ch, 1U);
 }
 
 void
@@ -15,7 +17,7 @@ print_stack(unsigned char* chars, unsigned int len)
     print_value(chars[i]);
 
     if (i != len - 1U)
-      print(&space, 1U);
+      write_file(get_stdout(), &space, 1U);
   }
 }
 
@@ -29,7 +31,7 @@ count_cstring(const char* str) {
 
 void
 print_cstring(const char* str) {
-  print(str, count_cstring(str));
+  write_file(get_stdout(), str, count_cstring(str));
 }
 
 _Bool

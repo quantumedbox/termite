@@ -1,29 +1,17 @@
+/*
+  Termite interpreter
+
+  // todo: description + explanation of certain design choices
+*/
+
 #include "os.h"
 #include "common.h"
+#include "terms.h"
 
 // todo: catch infinitely conveyoring loops
-// todo: make OS independent realizations of IO, use only generics here
-// todo: restrict file names to 128 specifically, always check the size before hand
 // todo: clear STDIN after execution
 // todo: do not include sequential pushes in debug stack output
-
-#define INPUT_LIMIT 66560U // 65KB
-#define STACK_LIMIT 66560U // 65KB
-
-enum OutputCodes {
-  OC_OK,
-  OC_INPUT_OVERFLOW,
-  OC_STACK_OVERFLOW,
-  OC_INPUT_EXHAUSTED,
-  OC_STACK_EXHAUSTED,
-  OC_INVALID_INPUT,
-  OC_ZERO_DIVISION,
-  OC_INFINITE_LOOP,
-
-  OC_FILE_ERROR = 0x10, // todo: make it generic 'IO error'?
-
-  OC_LAST_RESERVED = 0x1F // 32 values are reserved for termite status exits, other values are free to use
-};
+// todo: make inserted newline on stack printing consistent
 
 static int
 read_input(const char* filepath,
@@ -37,7 +25,7 @@ read_input(const char* filepath,
   unsigned int size;
   {
     TermiteHandle file;
-    if (!open_file(filepath, &file))
+    if (!open_file(filepath, &file, foFileRead))
       return OC_FILE_ERROR;
 
     if (!read_file(file, input, INPUT_LIMIT, &size)) {
@@ -46,6 +34,7 @@ read_input(const char* filepath,
     }
 
     if (size == INPUT_LIMIT + 1U) {
+      close_file(file);
       return OC_INPUT_OVERFLOW;
     }
 
@@ -53,23 +42,25 @@ read_input(const char* filepath,
       return OC_FILE_ERROR;
   }
 
+  unsigned int  cursor = 0U;
+
   unsigned char stack[STACK_LIMIT];
-  unsigned int stack_head = 0U;
+  unsigned int  stack_head = 0U;
 
   // EXPERIMENTAL: required for checking of infinite loops on rewinds
   // todo: make it compile-time optional?
   // todo: could be dangerous to just mul to 0
   unsigned char shadow_stack[STACK_LIMIT * catch_infinite_recursion];
   unsigned char shadow_stack_rewinded_with = 0U;
-  unsigned int shadow_stack_len = 0U;
-
-  unsigned int cursor = 0U;
+  unsigned int  shadow_stack_len = 0U;
 
   #define crash(code) \
     do { \
       exit_code = code; \
       goto EXIT_LOOP; \
     } while (0)
+
+  char op_char = '\0';
 
   while (1) {
     if (cursor == size)
@@ -84,6 +75,7 @@ read_input(const char* filepath,
       // pop value from stack and return it as exit code
       // this effectively terminates the program in predictable manner
       case '%': {
+        op_char = '%';
         if (stack_head == 0U)
           crash(OC_STACK_EXHAUSTED);
 
@@ -94,6 +86,7 @@ read_input(const char* filepath,
 
       // drop value from stack
       case '.': {
+        op_char = '.';
         if (stack_head == 0U)
           crash(OC_STACK_EXHAUSTED);
         stack_head--;
@@ -103,6 +96,7 @@ read_input(const char* filepath,
 
       // duplicate last value on stack
       case '@': {
+        op_char = '@';
         if (stack_head == STACK_LIMIT)
           crash(OC_STACK_OVERFLOW);
         if (stack_head == 0U)
@@ -115,6 +109,7 @@ read_input(const char* filepath,
 
       // swap two last values on stack
       case '^': {
+        op_char = '^';
         if (stack_head < 2U)
           crash(OC_STACK_EXHAUSTED);
         unsigned char buff = stack[stack_head - 1U];
@@ -127,6 +122,7 @@ read_input(const char* filepath,
       // 'conveyor belt' operator
       // place last value on the stack at the beginning
       case '#': {
+        op_char = '#';
         if (stack_head == 0U) {
           cursor++;
           break;
@@ -144,6 +140,7 @@ read_input(const char* filepath,
       // 'ronveyor belt' operator aka 'reverse conveyor'
       // place first value on the stack at the end
       case '$': {
+        op_char = '$';
         if (stack_head == 0U) {
           cursor++;
           break;
@@ -161,6 +158,7 @@ read_input(const char* filepath,
       // not operator, toggles least significant bit
       // todo: replace with proper bitwise operators?
       case '~': {
+        op_char = '~';
         if (stack_head == 0U)
           crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 1U] ^= 1U;
@@ -170,6 +168,7 @@ read_input(const char* filepath,
 
       // compare two stack values, consume them and push 1 or 0 depending on whether they're equal
       case '=': {
+        op_char = '=';
         if (stack_head < 2U)
           crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 2U] = stack[stack_head - 2U] == stack[stack_head - 1U];
@@ -181,6 +180,7 @@ read_input(const char* filepath,
       // compare two stack values, consume them and push 1 or 0 depending on how they compare
       // if last is bigger than next then 0, otherwise 1
       case '?': {
+        op_char = '?';
         if (stack_head < 2U)
           crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 2U] = stack[stack_head - 2U] < stack[stack_head - 1U];
@@ -191,7 +191,7 @@ read_input(const char* filepath,
 
       // add two stack values, consume them and push result of addition 
       case '+': {
-        // todo: define behaviour of overflow
+        op_char = '+';
         if (stack_head < 2U)
           crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 2U] = stack[stack_head - 2U] + stack[stack_head - 1U];
@@ -203,7 +203,7 @@ read_input(const char* filepath,
       // subtract two stack values, consume them and push result of subtraction
       // pops subtractor first, then subtrahend
       case '-': {
-        // todo: define behaviour of overflow
+        op_char = '-';
         if (stack_head < 2U)
           crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 2U] = stack[stack_head - 2U] - stack[stack_head - 1U];
@@ -214,7 +214,7 @@ read_input(const char* filepath,
 
       // multiply two stack values, consume them and push result of multiplication 
       case '*': {
-        // todo: define behaviour of overflow
+        op_char = '*';
         if (stack_head < 2U)
           crash(OC_STACK_EXHAUSTED);
         stack[stack_head - 2U] = stack[stack_head - 2U] * stack[stack_head - 1U];
@@ -226,7 +226,7 @@ read_input(const char* filepath,
       // divide two stack values, consume them and push result of division
       // pops divider first, then dividend
       case '/': {
-        // todo: define behaviour of overflow
+        op_char = '/';
         if (stack_head < 2U)
           crash(OC_STACK_EXHAUSTED);
         if (stack[stack_head - 1U] == 0U) {
@@ -241,6 +241,7 @@ read_input(const char* filepath,
 
       // pop from stack and print
       case '<': {
+        op_char = '<';
         if (stack_head == 0U)
           crash(OC_STACK_EXHAUSTED);
         if (print_stack_steps)
@@ -253,12 +254,13 @@ read_input(const char* filepath,
 
       // push single byte from stdin into stack
       case '>': {
+        op_char = '>';
         if (stack_head == STACK_LIMIT - 1U)
           crash(OC_STACK_OVERFLOW);
 
         char stdin_char;
         unsigned int chars_read;
-        if (!read_file(stdin, &stdin_char, 1U, &chars_read))
+        if (!read_file(get_stdin(), &stdin_char, 1U, &chars_read)) // todo: we could probably retrieve STDIN only once per startup
           crash(OC_FILE_ERROR);
 
         if (chars_read != 0U) {
@@ -275,6 +277,7 @@ read_input(const char* filepath,
 
       // pop from stack and rewind N tokens back
       case '[': {
+        op_char = '[';
         if (stack_head == 0U)
           crash(OC_STACK_EXHAUSTED);
 
@@ -285,8 +288,6 @@ read_input(const char* filepath,
           if (shadow_stack_rewinded_with != 0U) {
             if (compare_value_array(shadow_stack, shadow_stack_len, stack, stack_head)) {
                 crash(OC_INFINITE_LOOP);
-                // cursor = size;
-                // break;
               }
           }
           shadow_stack_rewinded_with = n_tokens;
@@ -342,6 +343,7 @@ read_input(const char* filepath,
 
       // pop from stack and seek N tokens forward
       case ']': {
+        op_char = ']';
         if (stack_head == 0U)
           crash(OC_STACK_EXHAUSTED);
 
@@ -414,21 +416,26 @@ read_input(const char* filepath,
               following -= 7U;
 
             cursor++;
-            stack[stack_head++] = (leading << 4U) | following;
+            stack[stack_head] = (leading << 4U) | following;
+            op_char = stack[stack_head];
+            stack_head++;
 
           } else
             crash(OC_INVALID_INPUT);
 
-        } else
-          stack[stack_head++] = (unsigned char)input[cursor++];
+        } else {
+          stack[stack_head] = (unsigned char)input[cursor++];
+          op_char = stack[stack_head];
+          stack_head++;
+        }
       }
     }
-    // todo: stack printing will mess with programs that rely on processing the output
-    //       we could probably somehow ensure that printed debug information is stripable
     if (print_stack_steps == (_Bool)1) {
       print_cstring("\n|");
       print_stack(stack, stack_head);
       print_cstring("|");
+      print_cstring(" ");
+      write_file(get_stdout(), (const char*)&op_char, 1U);
     }
   }
 
@@ -476,11 +483,14 @@ main(int argc, char** argv, char** envp)
     }
   }
 
-  return
+  int return_code =
     read_input(
       filepath,
       print_stack_steps,
       print_stack_on_exit,
       catch_infinite_recursion
     );
+
+  // close_file(get_stdin());
+  return return_code;
 }

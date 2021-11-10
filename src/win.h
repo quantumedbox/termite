@@ -17,6 +17,7 @@ typedef const char*     LPCSTR;
 #define HFILE_ERROR     -1
 
 #define OF_READ         0x00000000
+#define OF_WRITE        0x00000001
 
 typedef struct _OFSTRUCT {
   BYTE cBytes;
@@ -39,23 +40,30 @@ extern BOOL   __stdcall CloseHandle(HANDLE hObject);
 
 
 typedef HANDLE TermiteHandle;
-#define stdin GetStdHandle(STD_INPUT_HANDLE)
 
+typedef enum {
+  foFileRead,
+  foFileWrite,
+} FileOpenIntents;
 
-void
-print(const char* msg, unsigned int len);
+TermiteHandle get_stdout(void);
+TermiteHandle get_stdin(void);
 
 // returns 0 on file opening error, 1 otherwise
 _Bool
-open_file(const char* path, TermiteHandle* result);
+open_file(const char* path, TermiteHandle* result, FileOpenIntents intent);
 
 // returns 0 on file opening error, 1 otherwise
 _Bool
-close_file(TermiteHandle hFile);
+close_file(TermiteHandle file);
+
+// returns 0 on error or if not all chars were written, otherwise 1
+_Bool
+write_file(TermiteHandle file, const char* msg, unsigned int len);
 
 // returns 0 on read error, 1 otherwise
 _Bool
-read_file(TermiteHandle hFile,
+read_file(TermiteHandle file,
           char* restrict buff,
           unsigned int limit,
           unsigned int* restrict read_result);

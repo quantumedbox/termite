@@ -2,24 +2,38 @@
 
 #include "win.h"
 #include "common.h"
+#include "terms.h"
 
-void
-print(const char* msg, unsigned int len)
+TermiteHandle
+get_stdin(void)
 {
-  DWORD chars_written;
-  (void)WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), msg, len, &chars_written, NULL);
-  (void)chars_written;
+  return (TermiteHandle)GetStdHandle(STD_INPUT_HANDLE);
 }
 
-// returns 0 on file opening error, 1 otherwise
-_Bool
-open_file(const char* path, TermiteHandle* result)
+TermiteHandle
+get_stdout(void)
 {
-  if (count_cstring(path) > 128U)
+  return (TermiteHandle)GetStdHandle(STD_OUTPUT_HANDLE);
+}
+
+_Bool
+open_file(const char* path, TermiteHandle* result, FileOpenIntents intent)
+{
+  if (count_cstring(path) > FILEPATH_LIMIT)
     return (_Bool)0;
 
   OFSTRUCT file_struct;
-  HFILE file = OpenFile(path, &file_struct, OF_READ);
+  HFILE file;
+  switch (intent) {
+    case foFileRead:
+      file = OpenFile(path, &file_struct, OF_READ);
+      break;
+    case foFileWrite:
+      file = OpenFile(path, &file_struct, OF_WRITE);
+      break;
+  }
+  (void)file_struct;
+
   if (file == HFILE_ERROR)
     return (_Bool)0;
 
@@ -27,7 +41,6 @@ open_file(const char* path, TermiteHandle* result)
   return (_Bool)1;
 }
 
-// returns 0 on file opening error, 1 otherwise
 _Bool
 close_file(TermiteHandle file)
 {
@@ -35,15 +48,22 @@ close_file(TermiteHandle file)
   return status == (BOOL)0 ? (_Bool)0 : (_Bool)1;
 }
 
-// returns 0 on read error, 1 otherwise
 _Bool
-read_file(TermiteHandle hFile,
+write_file(TermiteHandle file, const char* msg, unsigned int len)
+{
+  DWORD chars_written;
+  BOOL status = WriteFile(file, msg, len, &chars_written, NULL);
+  return status == (BOOL)0 || chars_written != len ? (_Bool)0 : (_Bool)1;
+}
+
+_Bool
+read_file(TermiteHandle file,
           char* restrict buff,
           unsigned int limit,
           unsigned int* restrict read_result)
 {
   DWORD chars_read;
-  if (ReadFile((HANDLE)hFile, buff, limit, &chars_read, NULL) == (BOOL)0) {
+  if (ReadFile((HANDLE)file, buff, limit, &chars_read, NULL) == (BOOL)0) {
     *read_result = 0U; // todo: is it necessary?
     return (_Bool)0;
   }

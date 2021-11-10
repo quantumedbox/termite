@@ -11,8 +11,8 @@ def count(s: str) -> int:
         count += 1
       else:
         raise Exception(f"Ill-formed hex token '{s[i - 1: i + 1]}'")
-    elif s[i] in {'<', '>', '.', '@', '^', '~', '=', '?', '+', '-', '*', '/', '#', '$', ']', '['}:
-      count += 1
+    # elif s[i] in {'<', '>', '.', '@', '^', '~', '=', '?', '+', '-', '*', '/', '#', '$', ']', '['}:
+    #   count += 1
     elif s[i] in {'\r', '\n', ' ', '\t'}:
       pass
     else:
