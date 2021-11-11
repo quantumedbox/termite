@@ -450,10 +450,8 @@ EXIT_LOOP:
 }
 
 int
-main(int argc, char** argv, char** envp)
+term_main(int argc, const char** argv)
 {
-  (void)envp;
-
   if (argc == 1)
     return OC_FILE_ERROR; //no file given
 

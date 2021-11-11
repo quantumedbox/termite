@@ -1,6 +1,6 @@
 #include <stddef.h>
 
-// todo: make write_file buffered for stdout
+// todo: rename to winio.c
 
 #include "io.h"
 #include "common.h"
