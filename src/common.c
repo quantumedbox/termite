@@ -4,21 +4,26 @@
 #include "common.h"
 
 void
-print_value(unsigned char ch)
+write_byte(TermiteHandle file, unsigned char ch)
 {
-  write_file(get_stdout(), (const char*)&ch, 1U);
+  write_file(file, (const char*)&ch, 1U);
 }
 
 void
-print_stack(unsigned char* chars, unsigned int len)
+write_stack(TermiteHandle file, unsigned char* chars, unsigned int len)
 {
   const char space = ' ';
   for (unsigned int i = 0U; i < len; i++) {
-    print_value(chars[i]);
+    write_byte(file, chars[i]);
 
     if (i != len - 1U)
-      write_file(get_stdout(), &space, 1U);
+      write_file(file, &space, 1U);
   }
+}
+
+void
+write_cstring(TermiteHandle file, const char* str) {
+  write_file(file, str, count_cstring(str));
 }
 
 unsigned int
@@ -30,11 +35,6 @@ count_cstring(const char* str) {
   while (*str++ != '\0')
     len++;
   return len;
-}
-
-void
-print_cstring(const char* str) {
-  write_file(get_stdout(), str, count_cstring(str));
 }
 
 // todo: restrict might be dangerous in this case

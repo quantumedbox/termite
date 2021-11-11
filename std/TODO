@@ -1,5 +1,8 @@
 Ideas for shared standard programs that are useful
 
+- Termite
+  Programs that outputs ASCII image of termite logo
+
 - Stripper
   Recieve stream of termite code and strip all whitespace to make it compressed
   Might be vital in size limited code

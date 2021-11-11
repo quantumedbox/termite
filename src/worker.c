@@ -1,6 +1,9 @@
 /*
   Termite interpreter
 
+  You can compile this file with NO_WORKER_MAIN to get embeddable no main version
+    then you can just call read_input directly
+
   // todo: description + explanation of certain design choices
 */
 
@@ -9,38 +12,35 @@
 #include "terms.h"
 
 // todo: catch infinitely conveyoring loops
-// todo: clear STDIN after execution
+// todo: clear STDIN after execution if program didn't exhaust it
 // todo: do not include sequential pushes in debug stack output
 // todo: make inserted newline on stack printing consistent
 // todo: show some debugging hints about jumps
+// todo: read_input should not receive filepath, but opened filestream, closing of which should be on caller
+
+typedef struct {
+  _Bool print_stack_steps;
+  _Bool print_stack_on_exit;
+  _Bool catch_infinite_recursion;
+} WorkerArgs;
 
 static int
-read_input(const char* filepath,
-           _Bool print_stack_steps,
-           _Bool print_stack_on_exit,
-           _Bool catch_infinite_recursion)
+read_input(TermiteHandle input_handle,
+           TermiteHandle out_handle,
+           TermiteHandle in_handle,
+           WorkerArgs args)
 {
   int exit_code = 0;
 
-  char input[INPUT_LIMIT + 1U];
+  char input[INPUT_LIMIT + 1U] = {0};
   unsigned int size;
-  {
-    TermiteHandle file;
-    if (!open_file(filepath, &file, foFileRead))
-      return OC_FILE_ERROR;
 
-    if (!read_file(file, input, INPUT_LIMIT, &size)) {
-      close_file(file);
-      return OC_FILE_ERROR;
-    }
+  if (!read_file(input_handle, input, INPUT_LIMIT, &size)) {
+    return OC_FILE_ERROR;
+  }
 
-    if (size == INPUT_LIMIT + 1U) {
-      close_file(file);
-      return OC_INPUT_OVERFLOW;
-    }
-
-    if (!close_file(file))
-      return OC_FILE_ERROR;
+  if (size == INPUT_LIMIT + 1U) {
+    return OC_INPUT_OVERFLOW;
   }
 
   unsigned int  cursor = 0U;
@@ -51,7 +51,7 @@ read_input(const char* filepath,
   // EXPERIMENTAL: required for checking of infinite loops on rewinds
   // todo: make it compile-time optional?
   // todo: could be dangerous to just mul to 0
-  unsigned char shadow_stack[STACK_LIMIT * catch_infinite_recursion];
+  unsigned char shadow_stack[STACK_LIMIT * args.catch_infinite_recursion];
   unsigned char shadow_stack_rewinded_with = 0U;
   unsigned int  shadow_stack_len = 0U;
 
@@ -245,9 +245,9 @@ read_input(const char* filepath,
         op_char = '<';
         if (stack_head == 0U)
           crash(OC_STACK_EXHAUSTED);
-        if (print_stack_steps)
-          print_cstring("\n");
-        print_value(stack[stack_head - 1U]);
+        if (args.print_stack_steps)
+          write_cstring(out_handle, "\n");
+        write_byte(out_handle, stack[stack_head - 1U]);
         stack_head--;
         cursor++;
         break;
@@ -261,7 +261,7 @@ read_input(const char* filepath,
 
         char stdin_char;
         unsigned int chars_read;
-        if (!read_file(get_stdin(), &stdin_char, 1U, &chars_read)) // todo: we could probably retrieve STDIN only once per startup
+        if (!read_file(in_handle, &stdin_char, 1U, &chars_read)) // todo: we could probably retrieve STDIN only once per startup
           crash(OC_FILE_ERROR);
 
         if (chars_read != 0U) {
@@ -285,7 +285,7 @@ read_input(const char* filepath,
         unsigned char n_tokens = stack[stack_head - 1U];
         stack_head--;
 
-        if (catch_infinite_recursion) {
+        if (args.catch_infinite_recursion) {
           if (shadow_stack_rewinded_with != 0U) {
             if (compare_value_array(shadow_stack, shadow_stack_len, stack, stack_head)) {
                 crash(OC_INFINITE_LOOP);
@@ -431,68 +431,77 @@ read_input(const char* filepath,
         }
       }
     }
-    if (print_stack_steps == (_Bool)1) {
-      print_cstring("\n|");
-      print_stack(stack, stack_head);
-      print_cstring("|");
-      print_cstring(" ");
+    if (args.print_stack_steps == (_Bool)1) {
+      write_cstring(out_handle, "\n|");
+      write_stack(out_handle, stack, stack_head);
+      write_cstring(out_handle, "|");
+      write_cstring(out_handle, " ");
       write_file(get_stdout(), (const char*)&op_char, 1U);
     }
   }
 
 EXIT_LOOP:
-  if (print_stack_on_exit == (_Bool)1 || print_stack_steps == (_Bool)1) {
-    print_cstring("\n|");
-    print_stack(stack, stack_head);
-    print_cstring("|");
+  if (args.print_stack_on_exit == (_Bool)1 || args.print_stack_steps == (_Bool)1) {
+    write_cstring(out_handle, "\n|");
+    write_stack(out_handle, stack, stack_head);
+    write_cstring(out_handle, "|");
   }
   return exit_code;
 }
 
+#ifndef NO_WORKER_MAIN
 int
 term_main(int argc, const char** argv)
 {
   if (argc == 1)
     return OC_FILE_ERROR; //no file given
 
-  const char* filepath = argv[1];
-  _Bool print_stack_steps = (_Bool)0;
-  _Bool print_stack_on_exit = (_Bool)0;
-  _Bool catch_infinite_recursion = (_Bool)0;
+  WorkerArgs args = {0};
 
   for (int i = 2; i < argc; i++) {
     // turn all debug switches
     if (compare_cstring(argv[i], "d")) {
-      print_stack_steps = (_Bool)1;
-      catch_infinite_recursion = (_Bool)1;
+      args.print_stack_steps = (_Bool)1;
+      args.catch_infinite_recursion = (_Bool)1;
       // print_stack_on_exit = (_Bool)1;
 
     // turn on stack step printing
     } else if (compare_cstring(argv[i], "s")) {
-      print_stack_steps = (_Bool)1;
+      args.print_stack_steps = (_Bool)1;
 
     // show state of stack on program exit
     } else if (compare_cstring(argv[i], "e")) {
-      print_stack_on_exit = (_Bool)1;
+      args.print_stack_on_exit = (_Bool)1;
 
     // EXPERIMENTAL: try to catch rewinds that don't change state of stack
     // and thus are most likely infinitely looped
     } else if (compare_cstring(argv[i], "l")) {
-      catch_infinite_recursion = (_Bool)1;
+      args.catch_infinite_recursion = (_Bool)1;
     }
   }
 
   init_io();
 
+  if (argc < 2)
+    return OC_INVALID_INPUT;
+
+  TermiteHandle input_file;
+  if (!open_file(argv[1], &input_file, foFileRead))
+    return OC_FILE_ERROR;
+
   int return_code =
     read_input(
-      filepath,
-      print_stack_steps,
-      print_stack_on_exit,
-      catch_infinite_recursion
+      input_file,
+      get_stdout(),
+      get_stdin(),
+      args
     );
+
+  if (!close_file(input_file))
+    return OC_FILE_ERROR;
 
   deinit_io();
 
   return return_code;
 }
+#endif

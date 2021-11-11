@@ -1,17 +1,22 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include "io.h"
+
+// todo: return success of writing
+
+// todo: rename from 'value' to 'byte'
 void
-print_value(unsigned char ch);
+write_byte(TermiteHandle, unsigned char ch);
 
 void
-print_stack(unsigned char* chars, unsigned int len);
+write_stack(TermiteHandle, unsigned char* chars, unsigned int len);
+
+void
+write_cstring(TermiteHandle, const char* str);
 
 unsigned int
 count_cstring(const char* str);
-
-void
-print_cstring(const char* str);
 
 _Bool
 compare_value_array(unsigned char* restrict first, unsigned int first_len,
