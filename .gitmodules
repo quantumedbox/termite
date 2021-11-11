@@ -1,3 +1,0 @@
-[submodule "nocrt0"]
-	path = nocrt0
-	url = https://github.com/matveyt/nocrt0

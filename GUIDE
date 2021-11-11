@@ -1,8 +1,17 @@
-Language is deliberately minimalist and doesn't implement anything
+This package comes with certain utilities:
+
+  . Worker
+    Termite interpreter, main way of actually running termite code
+    For it to work you need to supply file path to your code file as its first argument
+    It supplies certain amount of debugging tools that are entered by command line arguments,
+      to turn on all of them pass "d" after your code path
+
+
+Termite is deliberately minimalist and doesn't implement anything
   that couldn't be expressed by combinations of more basic commands
+  Because of that you have to implement many functionalities by yourself instead
 
-
-Some compound operators:
+  Here's some reimplementations for things from stack-based land:
 
   . Over
     a b

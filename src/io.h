@@ -1,6 +1,8 @@
 #ifndef IO_H
 #define IO_H
 
+// todo: what about calling init_io and deinit_io from _start?
+
 typedef void* TermiteHandle;
 
 typedef enum {

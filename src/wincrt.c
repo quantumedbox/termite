@@ -1,5 +1,7 @@
 #include "common.h"
 
+// todo: handle '\\' and '"' by shifting given substring
+
 typedef char* LPSTR; // string of bytes
 
 _Noreturn extern void __stdcall ExitProcess(unsigned long exit_code);
