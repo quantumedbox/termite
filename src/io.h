@@ -1,11 +1,5 @@
-#ifndef OS_H
-#define OS_H
-
-#ifdef __WIN32
-  #include "win.h"
-#else
-  #error "currently only windows is supported"
-#endif
+#ifndef IO_H
+#define IO_H
 
 typedef void* TermiteHandle;
 
@@ -16,6 +10,10 @@ typedef enum {
 
 TermiteHandle get_stdout(void);
 TermiteHandle get_stdin(void);
+
+// todo: make them return status?
+void init_io(void);
+void deinit_io(void);
 
 // returns 0 on file opening error, 1 otherwise
 _Bool

@@ -4,7 +4,7 @@
   // todo: description + explanation of certain design choices
 */
 
-#include "os.h"
+#include "io.h"
 #include "common.h"
 #include "terms.h"
 
@@ -484,6 +484,8 @@ main(int argc, char** argv, char** envp)
     }
   }
 
+  init_io();
+
   int return_code =
     read_input(
       filepath,
@@ -492,6 +494,7 @@ main(int argc, char** argv, char** envp)
       catch_infinite_recursion
     );
 
-  // close_file(get_stdin());
+  deinit_io();
+
   return return_code;
 }

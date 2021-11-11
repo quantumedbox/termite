@@ -1,6 +1,8 @@
 #include <stddef.h>
 
-#include "win.h"
+// todo: make write_file buffered for stdout
+
+#include "io.h"
 #include "common.h"
 #include "terms.h"
 
@@ -41,16 +43,49 @@ extern BOOL   __stdcall CloseHandle(HANDLE hObject);
 #define STD_INPUT_HANDLE ((DWORD)-10)
 #define STD_OUTPUT_HANDLE ((DWORD)-11)
 
+static HANDLE stdout;
+static HANDLE stdin;
+static char stdout_buffer[STDOUT_BUFFER_SIZE];
+static unsigned int stdout_buffer_written;
+
+// todo: is flushing required?
+static _Bool
+write_file_impl(TermiteHandle file, const char* msg, unsigned int len)
+{
+  DWORD chars_written;
+  BOOL status = WriteFile(file, msg, len, &chars_written, NULL);
+  return status == (BOOL)0 || chars_written != len ? (_Bool)0 : (_Bool)1;
+}
+
+void
+init_io(void)
+{
+  stdout = (TermiteHandle)GetStdHandle(STD_OUTPUT_HANDLE);
+  stdin = (TermiteHandle)GetStdHandle(STD_INPUT_HANDLE);
+}
+
+void
+deinit_io(void)
+{
+  // check if there's anything left in stdout buffer
+  if (stdout_buffer_written != 0U)
+    write_file_impl(stdout, stdout_buffer, stdout_buffer_written);
+
+  // todo: is it necessary?
+  // close_file(get_stdout());
+  // close_file(get_stdin());
+}
+
 TermiteHandle
 get_stdin(void)
 {
-  return (TermiteHandle)GetStdHandle(STD_INPUT_HANDLE);
+  return (TermiteHandle)stdin;
 }
 
 TermiteHandle
 get_stdout(void)
 {
-  return (TermiteHandle)GetStdHandle(STD_OUTPUT_HANDLE);
+  return (TermiteHandle)stdout;
 }
 
 _Bool
@@ -88,9 +123,33 @@ close_file(TermiteHandle file)
 _Bool
 write_file(TermiteHandle file, const char* msg, unsigned int len)
 {
-  DWORD chars_written;
-  BOOL status = WriteFile(file, msg, len, &chars_written, NULL);
-  return status == (BOOL)0 || chars_written != len ? (_Bool)0 : (_Bool)1;
+  if (file == (TermiteHandle)stdout) {
+    unsigned int base = 0U;
+    while (len > 0U) {
+      // calculate how much of message should be buffered in each iteration
+      unsigned int to_write = STDOUT_BUFFER_SIZE - stdout_buffer_written;
+      if (to_write > len)
+        to_write = len;
+
+      // buffer the msg
+      for (unsigned int i = 0U; i < to_write; i++) {
+        stdout_buffer[stdout_buffer_written + i] = msg[base + i];
+      }
+      stdout_buffer_written += to_write;
+
+      // if buffer is full - write it
+      if (stdout_buffer_written == STDOUT_BUFFER_SIZE) {
+        write_file_impl(stdout, stdout_buffer, STDOUT_BUFFER_SIZE);
+        stdout_buffer_written = 0U;
+      }
+      len -= to_write;
+      base += to_write;
+    }
+    // todo: catch write_file_impl errors on iteration
+    return (_Bool)1;
+  } else {
+    return write_file_impl(file, msg, len);
+  }
 }
 
 _Bool

@@ -1,9 +1,11 @@
 #ifndef LIMITS_H
 #define LIMITS_H
 
-#define INPUT_LIMIT 66560U // 65KB
-#define STACK_LIMIT 66560U // 65KB
-#define FILEPATH_LIMIT 128U // 128 bytes
+#define INPUT_LIMIT         66560U  // 65KB
+#define STACK_LIMIT         66560U  // 65KB
+#define FILEPATH_LIMIT      128U    // 128 bytes
+
+#define STDOUT_BUFFER_SIZE  128U
 
 enum OutputCodes {
   OC_OK,
