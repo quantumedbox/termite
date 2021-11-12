@@ -22,32 +22,53 @@ typedef struct {
   _Bool catch_infinite_recursion;
 } WorkerArgs;
 
+static _Bool
+parse_hex(char* input_low, char* input_high, unsigned int pos)
+{
+  if (((input_low + pos + 1U) <= input_high) &&
+      !(input_low[pos] & 0x80) &&
+      ((input_low[pos] >= 'A' && input_low[pos] <= 'F') ||
+      (input_low[pos] >= '0' && input_low[pos] <= '9')) &&
+      !(input_low[pos + 1U] & 0x80) &&
+      ((input_low[pos + 1U] >= 'A' && input_low[pos + 1U] <= 'F') ||
+      (input_low[pos + 1U] >= '0' && input_low[pos + 1U] <= '9'))) {
+    return (_Bool)1;
+  }
+  return (_Bool)0;
+}
+
+static _Bool
+is_hex_char(char ch)
+{
+ return (ch >= 'A' && ch <= 'F') || (ch >= '0' && ch <= '9') ? (_Bool)1 : (_Bool)0;
+}
+
 // todo: should it be 0 based?
 static unsigned int
-count_tokens(char input[], unsigned int cursor)
+count_tokens(char* input_low, char* input_high, unsigned int pos)
 {
   unsigned int result = 0U;
-  char* cur = &input[cursor];
+  unsigned int cur = pos;
+
+  if (input_low + pos > input_high)
+    return 0U;
+
   while (1) {
-    switch (*cur) {
+    switch (input_low[cur]) {
       case  ' ':
       case '\n':
       case '\r':
       case '\t': break;
       default: {
-        if ((*cur >= 'A' && *cur <= 'F') || (*cur >= '0' && *cur <= '9')) {
-          if (cur != input) {
+        if (is_hex_char(input_low[cur])) {
+          if ((cur != 0U) && parse_hex(input_low, input_high, cur - 1U))
             cur--;
-            if ((*cur >= 'A' && *cur <= 'F') || (*cur >= '0' && *cur <= '9')) {
-              result++;
-            } // else
-          } // else // todo: shouldn't be possible, but better to handle such cases in some way
-        } else {
-          result++;
+          // else // todo: signal error
         }
+        result++;
       }
     }
-    if (cur == input)
+    if (cur == 0U)
       break;
     cur--;
   }
@@ -340,26 +361,13 @@ read_input(TermiteHandle input_handle,
             case '\r':
             case '\t': break;
             default: {
-              if (input[cursor] & 0x80U)
-                crash(OC_INVALID_INPUT);
-
-              if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
-                if (cursor == 0U)
+              if (is_hex_char(input[cursor])) {
+                if ((cursor != 0U) && parse_hex(input, &input[size - 1U], cursor - 1U))
+                  cursor--;
+                else
                   crash(OC_INVALID_INPUT);
-
-                cursor--;
-
-                if (input[cursor] & 0x80)
-                  crash(OC_INVALID_INPUT);
-
-                if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
-                  n_tokens--;
-                } else {
-                  crash(OC_INVALID_INPUT);
-                }
-              } else {
-                n_tokens--;
               }
+              n_tokens--;
             }
           }
 
@@ -391,26 +399,13 @@ read_input(TermiteHandle input_handle,
             case '\r':
             case '\t': break;
             default: {
-              if (input[cursor] & 0x80)
-                crash(OC_INVALID_INPUT);
-
-              if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
-                if (cursor == size)
+              if (is_hex_char(input[cursor])) {
+                if ((cursor != (size - 1U)) && parse_hex(input, &input[size - 1U], cursor))
+                  cursor++;
+                else
                   crash(OC_INVALID_INPUT);
-
-                cursor++;
-
-                if (input[cursor] & 0x80)
-                  crash(OC_INVALID_INPUT);
-
-                if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
-                  n_tokens--;
-                } else {
-                  crash(OC_INVALID_INPUT);
-                }
-              } else {
-                n_tokens--;
               }
+              n_tokens--;
             }
           }
 
@@ -425,39 +420,27 @@ read_input(TermiteHandle input_handle,
       default: {
         if (stack_head == STACK_LIMIT)
           crash(OC_STACK_OVERFLOW);
-        if (input[cursor] & 0x80)
-          crash(OC_INVALID_INPUT);
 
-        if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
-          unsigned char leading = input[cursor] - '0';
-          if (leading > 9U)
-            leading -= 7U;
+        if (is_hex_char(input[cursor])) {
+          if ((cursor != (size - 1U)) && parse_hex(input, &input[size - 1U], cursor)) {
+            unsigned char leading = input[cursor] - '0';
+            if (leading > 9U)
+              leading -= 7U;
 
-          if (cursor == size)
-            crash(OC_INVALID_INPUT);
-          if (input[cursor] & 0x80)
-            crash(OC_INVALID_INPUT);
-
-          cursor++;
-
-          if ((input[cursor] >= 'A' && input[cursor] <= 'F') || (input[cursor] >= '0' && input[cursor] <= '9')) {
-            unsigned char following = input[cursor] - '0';
+            unsigned char following = input[cursor + 1U] - '0';
             if (following > 9U)
               following -= 7U;
 
-            cursor++;
+            cursor += 2U;
             stack[stack_head] = (leading << 4U) | following;
-            op_char = stack[stack_head];
-            stack_head++;
-
           } else
             crash(OC_INVALID_INPUT);
 
-        } else {
+        } else
           stack[stack_head] = (unsigned char)input[cursor++];
-          op_char = stack[stack_head];
-          stack_head++;
-        }
+
+        op_char = stack[stack_head];
+        stack_head++;
       }
     }
     if (args.print_stack_steps == (_Bool)1) {
@@ -466,7 +449,7 @@ read_input(TermiteHandle input_handle,
       write_cstring(out_handle, "| (");
       write_file(get_stdout(), (const char*)&op_char, 1U);
       write_cstring(out_handle, " ");
-      write_uint(out_handle, count_tokens(input, cursor - 1U));
+      write_uint(out_handle, count_tokens(input, &input[size - 1U], cursor - 1U));
       write_cstring(out_handle, ")");
     }
   }
