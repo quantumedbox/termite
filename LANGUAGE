@@ -27,10 +27,3 @@ Available operators:
 Restrictions:
     . Input limit is 66560 bytes
     . Stack limit is 66560 bytes
-
-Arguemnt switches:
-Usage: termite.exe d ns ...
-    d  : Debug mode, includes stack stepping and infinite loop catching
-    s  : Turn on stack step printing
-    e  : Show stack on program exit
-    l  : Experimental -- Capture state of rewind and terminate program if stack is identical each time i.e. leads to infinite recursion

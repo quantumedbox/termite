@@ -1,7 +1,7 @@
 /*
   Termite interpreter
 
-  You can compile this file with NO_WORKER_MAIN to get embeddable no main version
+  You can compile this file with TERM_NO_WORKER_MAIN to get embeddable no main version
     then you can just call read_input directly
 
   // todo: description + explanation of certain design choices
@@ -12,17 +12,47 @@
 #include "terms.h"
 
 // todo: catch infinitely conveyoring loops
-// todo: clear STDIN after execution if program didn't exhaust it
 // todo: do not include sequential pushes in debug stack output
 // todo: make inserted newline on stack printing consistent
-// todo: show some debugging hints about jumps
-// todo: read_input should not receive filepath, but opened filestream, closing of which should be on caller
+// todo: universal hex parsing function to reduce size and ease the development
 
 typedef struct {
   _Bool print_stack_steps;
   _Bool print_stack_on_exit;
   _Bool catch_infinite_recursion;
 } WorkerArgs;
+
+// todo: should it be 0 based?
+static unsigned int
+count_tokens(char input[], unsigned int cursor)
+{
+  unsigned int result = 0U;
+  char* cur = &input[cursor];
+  while (1) {
+    switch (*cur) {
+      case  ' ':
+      case '\n':
+      case '\r':
+      case '\t': break;
+      default: {
+        if ((*cur >= 'A' && *cur <= 'F') || (*cur >= '0' && *cur <= '9')) {
+          if (cur != input) {
+            cur--;
+            if ((*cur >= 'A' && *cur <= 'F') || (*cur >= '0' && *cur <= '9')) {
+              result++;
+            } // else
+          } // else // todo: shouldn't be possible, but better to handle such cases in some way
+        } else {
+          result++;
+        }
+      }
+    }
+    if (cur == input)
+      break;
+    cur--;
+  }
+  return result;
+}
 
 static int
 read_input(TermiteHandle input_handle,
@@ -32,8 +62,9 @@ read_input(TermiteHandle input_handle,
 {
   int exit_code = 0;
 
-  char input[INPUT_LIMIT + 1U] = {0};
+  char input[INPUT_LIMIT + 1U]; // todo: initialize it with zeroes?
   unsigned int size;
+  unsigned int cursor = 0U;
 
   if (!read_file(input_handle, input, INPUT_LIMIT, &size)) {
     return OC_FILE_ERROR;
@@ -43,10 +74,8 @@ read_input(TermiteHandle input_handle,
     return OC_INPUT_OVERFLOW;
   }
 
-  unsigned int  cursor = 0U;
-
   unsigned char stack[STACK_LIMIT];
-  unsigned int  stack_head = 0U;
+  unsigned int stack_head = 0U;
 
   // EXPERIMENTAL: required for checking of infinite loops on rewinds
   // todo: make it compile-time optional?
@@ -287,7 +316,7 @@ read_input(TermiteHandle input_handle,
 
         if (args.catch_infinite_recursion) {
           if (shadow_stack_rewinded_with != 0U) {
-            if (compare_value_array(shadow_stack, shadow_stack_len, stack, stack_head)) {
+            if (compare_byte_array(shadow_stack, shadow_stack_len, stack, stack_head)) {
                 crash(OC_INFINITE_LOOP);
               }
           }
@@ -433,23 +462,25 @@ read_input(TermiteHandle input_handle,
     }
     if (args.print_stack_steps == (_Bool)1) {
       write_cstring(out_handle, "\n|");
-      write_stack(out_handle, stack, stack_head);
-      write_cstring(out_handle, "|");
-      write_cstring(out_handle, " ");
+      write_byte_array(out_handle, stack, stack_head);
+      write_cstring(out_handle, "| (");
       write_file(get_stdout(), (const char*)&op_char, 1U);
+      write_cstring(out_handle, " ");
+      write_uint(out_handle, count_tokens(input, cursor - 1U));
+      write_cstring(out_handle, ")");
     }
   }
 
 EXIT_LOOP:
   if (args.print_stack_on_exit == (_Bool)1 || args.print_stack_steps == (_Bool)1) {
     write_cstring(out_handle, "\n|");
-    write_stack(out_handle, stack, stack_head);
+    write_byte_array(out_handle, stack, stack_head);
     write_cstring(out_handle, "|");
   }
   return exit_code;
 }
 
-#ifndef NO_WORKER_MAIN
+#ifndef TERM_NO_WORKER_MAIN
 int
 term_main(int argc, const char** argv)
 {
@@ -463,7 +494,7 @@ term_main(int argc, const char** argv)
     if (compare_cstring(argv[i], "d")) {
       args.print_stack_steps = (_Bool)1;
       args.catch_infinite_recursion = (_Bool)1;
-      // print_stack_on_exit = (_Bool)1;
+      args.print_stack_on_exit = (_Bool)1;
 
     // turn on stack step printing
     } else if (compare_cstring(argv[i], "s")) {

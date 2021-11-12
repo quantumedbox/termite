@@ -1,6 +1,16 @@
 Ideas for shared standard programs that are useful
 
-- Termite
+- Termite termite
+  Small interpreter written in termite that could run code from supplied instream
+
+- Hex to byte
+  Could be quite useful, especially in interpreting code
+
+  Example:
+    input: |31 35|
+    output: |15|
+
+- Icon
   Programs that outputs ASCII image of termite logo
 
 - Stripper

@@ -8,11 +8,11 @@ Proposals and ideas for the Termite programing language and its development envi
 
     . Macros
       Self-contained code pieces could be injected into code directly by specific names
-      which eliminates need to put "magic strings" by yourself
+        which eliminates need to put "magic strings" by yourself
 
     . Labels
       Currently it's extremely dangerous and unhandy to write even simple flows
-      as change of composition within bodies could quickly destroy everything, as previously inserted jumps do not act the same anymore
+        as change of composition within bodies could quickly destroy everything, as previously inserted jumps do not act the same anymore
 
     . Comments
       Termite has no concept of comments, everything given is considered to be equally important
@@ -26,7 +26,7 @@ Proposals and ideas for the Termite programing language and its development envi
 
 - Make portable interpreter
   Originally one of the goals was to make it as independent as possible, but it did harm
-  relative to portability, interpreter could be compiled strictly against MinGW under Windows
+    relative to portability, interpreter could be compiled strictly against MinGW under Windows
 
   Good thing is, interpreter doesn't use anything OS specific outside of IO and minimalist CRT
   Under Linux IO functionalities might be achieved by syscalls without even need to link against anything
@@ -37,12 +37,16 @@ Proposals and ideas for the Termite programing language and its development envi
   Easy architecture allows to make it quite easily
 
 
-- Ditch . (drop) operator as its functionality might be achieved with @=~[ sequence
-  It's rather rarely used and could be substituted by using preprocessor rather quickly
-  On the other hand it could drastically increase the average size of programs
+- Own image format
+  Termite way of processing data creates interesting challenges
+  One of possible ways to go with it is to create own formats and rules to facilitate certain features
+
+  With image format comes the need to render it
+  For it there should be minimalist image renderer supplied with termite package
 
 
 - Is % terminator essential?
-  It's possible to assume that last value on stack when needle reaches out of bounds is return code, then for termination program should make itself go out of bounds
+  It's possible to assume that last value on stack when needle reaches out of bounds is return code,
+    then for termination program should make itself go out of bounds
 
   Also this will require to have explicit return value in every program
