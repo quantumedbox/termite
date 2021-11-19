@@ -1,13 +1,15 @@
 Termite is a small stack-based programming language
-It operates on interpreting input sequence directly without processing it in any way
-Basic structural element of every program is token, there's 3 kinds of them:
-    . Hexadecimals : Byte, consists of 2 characters, letters are capital, - example: 00, 32, FA, 4D
-    . Literals : Any single ASCII compliment character that doesn't correspond to any operator or hex, - example: a b c
-    . Operators : Special symbols that change state of stack or cursor, example -  / @ [
+
+Worker realisation operates on interpreting input sequence directly without processing it in any way
+    Basic structural element of every program is termite token, there's 2 kinds of them:
+        . Data : Symbols that push data into the stack
+            - Hexadecimals : Consists of 2 ASCII characters, letters are always capital, - example: 00, 32, FA, 4D
+            - Literals : Any single character that doesn't correspond to any operator or hex, - example: a b c
+        . Operators : Special symbols that change state of stack or cursor, example - / @ [
 
 Available operators:
-    < Output    : Pop value and output it to STDOUT
-    > Input     : Tries to read single byte from STDIN and pushes two values: byte that was read, then 01 if something was read or 00 if file is at EOF
+    < Write     : Pop value and output it to STDOUT
+    > Read      : Tries to read single byte from STDIN and pushes two values: byte that was read, then 01 if something was read or 00 if file is at EOF
     . Drop      : Deletes last value from the stack
     @ Duplicate : Clones last value on the stack
     ^ Swap      : Swaps two last values

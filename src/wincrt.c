@@ -1,8 +1,8 @@
-#include "common.h"
-
 // todo: handle '\\' and '"' by shifting given substring
 
-typedef char* LPSTR; // string of bytes
+// parsing reference: https://docs.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments?view=msvc-160
+
+typedef char* LPSTR;
 
 _Noreturn extern void __stdcall ExitProcess(unsigned long exit_code);
 extern char* __stdcall GetCommandLineA(void);
@@ -53,7 +53,6 @@ __asm__(
 );
 #endif
 
-// parsing reference: https://docs.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments?view=msvc-160
 static int
 count_args(const char* command_line)
 {
@@ -65,7 +64,7 @@ count_args(const char* command_line)
   for (const char* ptr = command_line; *ptr;) {
     char ch = *ptr++;
     if (ch == ' ' || ch == '\t') {
-      if (!is_quoted) {
+      if (!is_quoted && is_counting) {
         result++;
         is_counting = (_Bool)0;
       }
@@ -99,20 +98,29 @@ parse_args(char* command_line, ArgArray* argv)
   _Bool is_counting = (_Bool)0;
 
   for (char* ptr = command_line; *ptr;) {
-    char ch = *ptr;
-    if (ch == ' ' || ch == '\t') {
+    if (*ptr == ' ' || *ptr == '\t') {
       if (!is_quoted) {
         *ptr = '\0';
         is_counting = (_Bool)0;
       }
-    } else if (ch == '"') {
+    } else if (*ptr == '"') {
       is_quoted = is_quoted? (_Bool)0 : (_Bool)1;
-    } else if ((ch == '\\') && (*(ptr + 1) == '"')) {
+      // for (char* shift = ptr; *shift; shift++) {
+      //   *shift = *(shift + 1U);
+      // }
+    } else if ((*ptr == '\\') && (*(ptr + 1) == '"')) {
+      // for (char* shift = ptr; *shift; shift++) {
+      //   *shift = *(shift + 1U);
+      // }
       ptr++;
       if (!is_counting) {
         *cur_arg++ = ptr;
         is_counting = (_Bool)1;
       }
+    // } else if ((ch == '\\') && (*(ptr + 1) == '\\')) {
+    //   for (char* shift = ptr + 1U; *shift; shift++) {
+    //     *shift = shift[1];
+    //   }
     } else {
       if (!is_counting) {
         *cur_arg++ = ptr;

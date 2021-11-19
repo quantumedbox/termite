@@ -45,6 +45,13 @@ Proposals and ideas for the Termite programing language and its development envi
   For it there should be minimalist image renderer supplied with termite package
 
 
+- Distributions
+  Termite project should be easily distributable in binary form
+  Documents and guides should be included too
+
+  Probably there should be some way of automation on git staging with building everything and adding to a single archive
+
+
 - Is % terminator essential?
   It's possible to assume that last value on stack when needle reaches out of bounds is return code,
     then for termination program should make itself go out of bounds

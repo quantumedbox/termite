@@ -2,7 +2,7 @@
   Termite interpreter
 
   You can compile this file with TERM_NO_WORKER_MAIN to get embeddable no main version
-    then you can just call read_input directly
+    then you can just call read_input directly without worrying about main
 
   // todo: description + explanation of certain design choices
 */
@@ -13,8 +13,6 @@
 
 // todo: catch infinitely conveyoring loops
 // todo: do not include sequential pushes in debug stack output
-// todo: make inserted newline on stack printing consistent
-// todo: universal hex parsing function to reduce size and ease the development
 
 typedef struct {
   _Bool print_stack_steps;
@@ -22,25 +20,25 @@ typedef struct {
   _Bool catch_infinite_recursion;
 } WorkerArgs;
 
-static _Bool
-parse_hex(char* input_low, char* input_high, unsigned int pos)
-{
-  if (((input_low + pos + 1U) <= input_high) &&
-      !(input_low[pos] & 0x80) &&
-      ((input_low[pos] >= 'A' && input_low[pos] <= 'F') ||
-      (input_low[pos] >= '0' && input_low[pos] <= '9')) &&
-      !(input_low[pos + 1U] & 0x80) &&
-      ((input_low[pos + 1U] >= 'A' && input_low[pos + 1U] <= 'F') ||
-      (input_low[pos + 1U] >= '0' && input_low[pos + 1U] <= '9'))) {
-    return (_Bool)1;
-  }
-  return (_Bool)0;
-}
-
+// todo: move these funcs to common.h?
 static _Bool
 is_hex_char(char ch)
 {
  return (ch >= 'A' && ch <= 'F') || (ch >= '0' && ch <= '9') ? (_Bool)1 : (_Bool)0;
+}
+
+// todo: signal reasoning behind failure? for example non ascii chars
+static _Bool
+parse_hex(char* input_low, char* input_high, unsigned int pos)
+{
+  if ((input_low + pos + 1U <= input_high) &&
+      ((input_low[pos] >= 'A' && input_low[pos] <= 'F') ||
+        (input_low[pos] >= '0' && input_low[pos] <= '9')) &&
+      ((input_low[pos + 1U] >= 'A' && input_low[pos + 1U] <= 'F') ||
+        (input_low[pos + 1U] >= '0' && input_low[pos + 1U] <= '9'))) {
+    return (_Bool)1;
+  }
+  return (_Bool)0;
 }
 
 // todo: should it be 0 based?

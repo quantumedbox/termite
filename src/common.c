@@ -1,11 +1,11 @@
 #include <stddef.h>
+#include <limits.h>
 
 #include "io.h"
 #include "common.h"
 
-#define CHAR_BIT 8 // bald assumption
-#define MAX_DECIMAL_CHARS_UINT 3 * sizeof(unsigned int) * CHAR_BIT / 8
-#define MAX_DECIMAL_CHARS_INT 3 * sizeof(int) * CHAR_BIT / 8 + 1
+#define MAX_DECIMAL_CHARS_UINT  3 * sizeof(unsigned int) * CHAR_BIT / 8
+#define MAX_DECIMAL_CHARS_INT   3 * sizeof(int) * CHAR_BIT / 8 + 1
 
 // todo: write for signed integers
 
