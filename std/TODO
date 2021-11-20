@@ -1,5 +1,13 @@
 Ideas for shared standard programs that are useful
 
+- System behind names, probably stylistic too
+  For example shortening might be useful, especially if they will be invokable from terimte itself
+
+- Read
+  Various read functionalities for acting on supplied data, such as:
+    . read-all
+    . read-hex
+
 - Termite termite
   Small interpreter written in termite that could run code from supplied instream
 
@@ -26,11 +34,9 @@ Ideas for shared standard programs that are useful
 - String functions
   NULL terminated strings are more than possible to work in such environment
   We should get commonly used functions for them such as:
-
     . len
     . compare
     . append
-
     and others
 
 - Short arithmetic

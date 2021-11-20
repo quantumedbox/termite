@@ -310,7 +310,7 @@ read_input(TermiteHandle input_handle,
         char stdin_char;
         unsigned int chars_read;
         if (!read_file(in_handle, &stdin_char, 1U, &chars_read)) // todo: we could probably retrieve STDIN only once per startup
-          crash(OC_FILE_ERROR);
+          crash(OC_FILE_ERROR); // todo: could be triggered when there's no input, should give INPUT_EXHAUTED error on such cases
 
         if (chars_read != 0U) {
           stack[stack_head++] = (unsigned char)stdin_char;

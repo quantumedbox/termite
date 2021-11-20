@@ -19,23 +19,15 @@
     MAGIC 22 X:NAME - Load content of file at path X into buffer
 
   Syntax:
-    command [arg [arg ...]]:
-      arg
+    command [arg val [arg val ...]]:
+      input
 
 """
-
-# todo: capture return code from Command.do() call for uniform handling of them
-# todo: data command for pushing data in termite syntax
-# todo: make interface for appending programs to each other
 
 import os, sys, subprocess, tempfile
 from typing import List, Tuple
 
 default_timeout = 5.0
-default_script_folder = "hive_scripts"
-
-
-class TermiteError(Exception): pass
 
 
 class Command:
@@ -44,38 +36,35 @@ class Command:
 
 
 # todo: args
-def run_worker_script(path: str, instream: bytes = b"", timeout: float = None, arg_string: str = "") -> Tuple[int, bytes]:
-    kwargs = {
-        "capture_output": True,
-        "input": instream
-    }
+def run_worker_script(path: str, instream: bytes = b"", timeout: float = None) -> Tuple[int, bytes]:
+    print(path)
+    kwargs = {"capture_output": True, "input": instream}
     if timeout is not None:
         kwargs["timeout"] = timeout
-    execution = subprocess.run(["termite-worker", path, arg_string], **kwargs)
+    execution = subprocess.run(["termite-worker", path], **kwargs)
     return (execution.returncode, execution.stdout)
 
 
 class RunCodeCommand(Command):
-    def __init__(self, code: str, arg_string: str = ""):
+    def __init__(self, code: str):
         self.code = code
-        self.arg_string = arg_string
 
     def do(self, input_data: bytes, **kwargs) -> bytes:
         result = b""
-        descriptor, tpath = tempfile.mkstemp(dir=os.getcwd())
+        descriptor, tpath = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(sys.argv[0])))
         try:
             with open(tpath, "w+b") as f:
                 f.write(bytes(self.code, encoding="latin1"))
-            returncode, output = run_worker_script(os.path.basename(tpath), input_data, arg_string=self.arg_string)
+            returncode, output = run_worker_script(tpath)
+            print(output)
             if returncode != 0:
-                returncode, errorout = run_worker_script(
-                    "std/spit-error.tm",
-                    bytes(chr(returncode), encoding="latin1")
-                )
+                returncode, errorout = run_worker_script("std/spit-error")
                 if returncode != 0:
-                    raise Exception(f"return code {returncode} [can't run \"std/spit-error.tm\"]")
-                output += b"\n" + errorout
+                    raise Exception(f"error while running error spitter, code {returncode}")
+                raise Exception(str(errorout, encoding="latin1"))
             result = output
+        except subprocess.TimeoutExpired:
+            pass
         except Exception as e:
             os.close(descriptor)
             os.unlink(tpath)
@@ -85,40 +74,6 @@ class RunCodeCommand(Command):
         return result
 
 
-class RunScriptCommand(Command):
-    def __init__(self, path: str, arg_string: str = ""):
-        if not path.endswith(".tm"):
-            path = path + ".tm"
-        self.path = path
-        self.arg_string = arg_string
-
-    def do(self, input_data: bytes, **kwargs) -> bytes:
-        returncode, output = run_worker_script(self.path, input_data, arg_string=self.arg_string)
-        if returncode != 0:
-            returncode, errorout = run_worker_script(
-                "std/spit-error.tm",
-                bytes(chr(returncode), encoding="latin1")
-            )
-            if returncode != 0: # todo: show output even on error
-                raise Exception(f"return code {returncode} [can't run \"std/spit-error.tm\"]")
-            output += b"\n" + errorout
-        return output
-
-
-class DropOutputCommand(Command):
-    def do(self, _input_data: bytes, **kwargs) -> bytes:
-        return b""
-
-
-class AppendStringCommand(Command):
-    def __init__(self, string: str):
-        self.string = bytes(string, encoding="utf-8")
-
-    def do(self, input_data: bytes, **kwargs) -> bytes:
-        return input_data + self.string + b"\x00"
-
-
-# todo: make it generator-driven
 def parse_command_sequence(input_str: str) -> List[Command]:
     def find_next_word(input_str: str) -> Tuple[str, int]:
         index = 0
@@ -129,8 +84,7 @@ def parse_command_sequence(input_str: str) -> List[Command]:
                 case "\n":
                     return ("\n", index)
                 case "\"":
-                    index += 1
-                    beginning = index
+                    beginning = index + 1
                     while index < len(input_str):
                         match input_str[index]:
                             case "\\":
@@ -149,12 +103,13 @@ def parse_command_sequence(input_str: str) -> List[Command]:
                     while index < len(input_str):
                         newline = input_str[index:].find("\n")
                         if newline == -1:
-                            return (input_str[beginning:].strip(), len(input_str))
-                        elif newline != len(input_str) - 1 and input_str[index + newline + 1] in (" ", "\t", "\r"):
+                            return (input_str[beginning:], len(input_str))
+                        elif newline != len(input_str) - 1 and input_str[index + 1] in (" ", "\t", "\r"):
                             index += newline + 1
+                            continue
                         else:
-                            return (input_str[beginning:index + newline].strip(), index + newline)
-                    return (input_str[beginning:index].strip(), index) # todo: is it okay?
+                            return (input_str[beginning:newline], newline)
+                    return (input_str[beginning:index], index)
                 case _:
                     beginning = index
                     while index < len(input_str):
@@ -175,13 +130,14 @@ def parse_command_sequence(input_str: str) -> List[Command]:
         result = []
         index = 0
         word, parsed = find_next_word(input_str)
+        # print(result)
         while parsed != 0:
             result.append(word)
             if index + parsed != len(input_str) and input_str[index + parsed] == "\n":
-                parsed += 1
                 break
             index += parsed
             word, parsed = find_next_word(input_str[index:])
+            # print(result)
         return (result, index + parsed)
 
     result = []
@@ -189,20 +145,10 @@ def parse_command_sequence(input_str: str) -> List[Command]:
     words, parsed = parse_next_command(input_str)
     while parsed != 0:
         match words:
-            case ["run", "args", arg_string, code]:
-                result.append(RunCodeCommand(code, arg_string))
-            case ["run", code]:
+            case ["run", "code", code]:
                 result.append(RunCodeCommand(code))
-            case ["script", path, "args", arg_string]:
-                result.append(RunScriptCommand(path, arg_string))
-            case ["script", path]:
-                result.append(RunScriptCommand(path))
-            case ["string", string]:
-                result.append(AppendStringCommand(string))
-            case ["drop"]:
-                result.append(DropOutputCommand())
             case _:
-                raise Exception(f"unknown command: {words}")
+                raise Exception("unknown command")
         index += parsed
         words, parsed = parse_next_command(input_str[index:])
     return result
@@ -213,7 +159,6 @@ def process(input_str: str) -> bytes:
     output = b""
     for command in commands:
         output = command.do(output)
-    print(str(output, encoding="latin1"))
     return output
 
 

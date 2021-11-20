@@ -39,6 +39,7 @@ extern BOOL   __stdcall ReadFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOf
 extern HANDLE __stdcall GetStdHandle(DWORD nStdHandle);
 extern HFILE  __stdcall OpenFile(LPCSTR lpFileName, LPOFSTRUCT lpReOpenBuff, UINT uStyle);
 extern BOOL   __stdcall CloseHandle(HANDLE hObject);
+extern DWORD  __stdcall GetLastError(void);
 
 #define STD_INPUT_HANDLE ((DWORD)-10)
 #define STD_OUTPUT_HANDLE ((DWORD)-11)
@@ -160,7 +161,13 @@ read_file(TermiteHandle file,
 {
   DWORD chars_read;
   if (ReadFile((HANDLE)file, buff, limit, &chars_read, NULL) == (BOOL)0) {
-    *read_result = 0U; // todo: is it necessary?
+    *read_result = 0U;
+    unsigned int status = GetLastError();
+    if (status == 109) {
+      // ERROR_BROKEN_PIPE case workaround
+      // for some reason python's pipe is no longer valid when its contents are exhausted
+      return (_Bool)1;
+    }
     return (_Bool)0;
   }
   *read_result = (unsigned int)chars_read;
