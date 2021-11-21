@@ -29,10 +29,9 @@
 # todo: make interface for appending programs to each other
 
 import os, sys, subprocess, tempfile
-from typing import List, Tuple
+from typing import List, Tuple, Iterator
 
 default_timeout = 5.0
-default_script_folder = "hive_scripts"
 
 
 class Command:
@@ -115,77 +114,82 @@ class AppendStringCommand(Command):
     def do(self, input_data: bytes, **kwargs) -> bytes:
         return input_data + self.string + b"\x00"
 
-
-# todo: make it generator-driven
-def parse_command_sequence(input_str: str) -> List[Command]:
-    def find_next_word(input_str: str) -> Tuple[str, int]:
-        index = 0
-        while index < len(input_str):
-            match input_str[index]:
-                case " " | "\t" | "\r":
-                    index += 1
-                case "\n":
-                    return ("\n", index)
-                case "\"":
-                    index += 1
-                    beginning = index
-                    while index < len(input_str):
-                        match input_str[index]:
-                            case "\\":
-                                if index != len(input_str) - 1 and input_str[index + 1] == "\"":
-                                    index += 2
-                                else:
-                                    index += 1
-                            case "\"":
+# todo: could break easily, maybe just use regex instead?
+def find_next_word(input_str: str) -> Tuple[str, int]:
+    index = 0
+    while index < len(input_str):
+        match input_str[index]:
+            case " " | "\t" | "\r":
+                index += 1
+            case "\n":
+                return ("\n", index)
+            case "\"":
+                index += 1
+                beginning = index
+                while index < len(input_str):
+                    match input_str[index]:
+                        case "\\":
+                            if index != len(input_str) - 1 and input_str[index + 1] == "\"":
+                                index += 2
+                            else:
+                                index += 1
+                        case "\"":
+                            return (input_str[beginning:index], index + 1)
+                        case _:
+                            index += 1
+                raise Exception("unclosed \"")
+            case ":":
+                index += 1
+                beginning = index
+                while index < len(input_str):
+                    newline = input_str[index:].find("\n")
+                    if newline == -1:
+                        return (input_str[beginning:].strip(), len(input_str))
+                    elif newline != len(input_str) - 1 and input_str[index + newline + 1] in (" ", "\t", "\r"):
+                        index += newline + 1
+                    else:
+                        return (input_str[beginning:index + newline].strip(), index + newline)
+                return (input_str[beginning:index].strip(), index) # todo: is it okay?
+            case _:
+                beginning = index
+                while index < len(input_str):
+                    match input_str[index]:
+                        case "\r":
+                            if index != len(input_str) - 1 and input_str[index + 1] == "\n":
                                 return (input_str[beginning:index], index + 1)
-                            case _:
-                                index += 1
-                    raise Exception("unclosed \"")
-                case ":":
-                    index += 1
-                    beginning = index
-                    while index < len(input_str):
-                        newline = input_str[index:].find("\n")
-                        if newline == -1:
-                            return (input_str[beginning:].strip(), len(input_str))
-                        elif newline != len(input_str) - 1 and input_str[index + newline + 1] in (" ", "\t", "\r"):
-                            index += newline + 1
-                        else:
-                            return (input_str[beginning:index + newline].strip(), index + newline)
-                    return (input_str[beginning:index].strip(), index) # todo: is it okay?
-                case _:
-                    beginning = index
-                    while index < len(input_str):
-                        match input_str[index]:
-                            case "\r":
-                                if index != len(input_str) - 1 and input_str[index + 1] == "\n":
-                                    return (input_str[beginning:index], index + 1)
-                                else:
-                                    return (input_str[beginning:index], index)
-                            case " " | "\t" | "\n" | ":":
+                            else:
                                 return (input_str[beginning:index], index)
-                            case _:
-                                index += 1
-                    return (input_str[beginning:], len(input_str) - 1)
-        return ("", 0)
+                        case " " | "\t" | "\n" | ":":
+                            return (input_str[beginning:index], index)
+                        case _:
+                            index += 1
+                return (input_str[beginning:], len(input_str) - 1)
+    return ("", 0)
 
-    def parse_next_command(input_str: str) -> Tuple[List[str], int]:
-        result = []
-        index = 0
-        word, parsed = find_next_word(input_str)
-        while parsed != 0:
-            result.append(word)
-            if index + parsed != len(input_str) and input_str[index + parsed] == "\n":
-                parsed += 1
-                break
-            index += parsed
-            word, parsed = find_next_word(input_str[index:])
-        return (result, index + parsed)
-
+def parse_next_command(input_str: str) -> Tuple[List[str], int]:
     result = []
+    index = 0
+    word, parsed = find_next_word(input_str)
+    while parsed != 0:
+        result.append(word)
+        if index + parsed != len(input_str) and input_str[index + parsed] == "\n":
+            parsed += 1
+            break
+        index += parsed
+        word, parsed = find_next_word(input_str[index:])
+    return (result, index + parsed)
+
+def parse_commands(input_str: str) -> Iterator[List[str]]:
     index = 0
     words, parsed = parse_next_command(input_str)
     while parsed != 0:
+        yield words
+        index += parsed
+        words, parsed = parse_next_command(input_str[index:])
+
+def parse_command_sequence(input_str: str) -> List[Command]:
+    result = []
+    for words in parse_commands(input_str):
         match words:
             case ["run", "args", arg_string, code]:
                 result.append(RunCodeCommand(code, arg_string))
@@ -201,8 +205,6 @@ def parse_command_sequence(input_str: str) -> List[Command]:
                 result.append(DropOutputCommand())
             case _:
                 raise Exception(f"unknown command: {words}")
-        index += parsed
-        words, parsed = parse_next_command(input_str[index:])
     return result
 
 
