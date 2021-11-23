@@ -5,10 +5,12 @@
 """
 
 # todo: make virtual file system or at least make sure that only internal files are possible to interact with
-# todo: env variable with directory of shared access scripts
+# todo: env variable with directory of shared access scripts instead of just const
 # todo: restrict how many scripts might be stored by certain infividuals and also in general
 # todo: manage user profiles, authorship and other meta data for scripts
 # todo: create ScriptFolder automatically if it doesn't exist
+# todo: passing of interactive console-like stdin handle
+# todo: filesystem help notice
 
 import os
 
@@ -21,36 +23,13 @@ import hivemind
 CommandPrefix = ">"
 ScriptFolder = "shared"
 
-# todo: should be part of hivemind.py?
-help_text = """```
-    Hivemind scripts are composed from command sequence
-    Every termite invocation operates on output of previous termite program 
-
-    Command syntax:
-        command [arg | "arg"]+ [: whitespace arg]
-
-    Example:
-        run args "s":
-            mycode
-
-    Hivemind commands:
-        . run [args args-string] code
-            -- run supplied termite code, args are optional
-        . script path [args args-string]
-            -- run termite script at given path, args are optional
-        . string data
-            -- append null terminated string in current output buffer
-        . drop
-            -- zero the output buffer
-
-```"""
 
 # todo: fix
 def discord_to_hivemind(input_str: str) -> str:
     to_process = input_str
     result = ""
     while len(to_process) != 0:
-        left = to_process.find("```")
+        left = to_process.find("\n```")
         if left != -1:
             right = to_process[left+3:].find("```")
             if right != -1:
@@ -60,6 +39,20 @@ def discord_to_hivemind(input_str: str) -> str:
                 continue
         result += to_process
         to_process = ""
+    return result
+
+
+def strip_discord_formatting(s: str) -> str:
+    result = s.strip()
+    if result.startswith("```") and result.endswith("```"):
+        l = 0
+        for ch in result:
+            if ch.isspace():
+                break
+            l += 1
+        result = result[l:-3]
+    elif result.startswith("`") and result.endswith("`"):
+        result = result[1:-1]
     return result
 
 
@@ -75,6 +68,7 @@ async def filesystem_dir(ctx, directory: str):
     except OSError as e:
         await ctx.send(f"```\n[invalid directory]```")
 
+
 async def filesystem_file(ctx, path: str):
     if not path.endswith(".tm"):
         path = path + ".tm"
@@ -83,6 +77,7 @@ async def filesystem_file(ctx, path: str):
             await ctx.send(f"```\n{f.read()}```")
     except OSError:
         await ctx.send(f"```\n[invalid file]```")
+
 
 async def filesystem_save(ctx, path, code, forced = False):
     path = ScriptFolder + '/' + path
@@ -93,7 +88,6 @@ async def filesystem_save(ctx, path, code, forced = False):
             with open(os.getcwd() + '/' + path, "w") as f:
                 f.write(code)
         except OSError as e:
-            print(e)
             await ctx.send(f"```\n[cannot save]```")
     else:
         await ctx.send(f"```\n[file already exists, use 'save forced <path>' to forced rewrite]```")
@@ -101,15 +95,35 @@ async def filesystem_save(ctx, path, code, forced = False):
 
 class Commands(commands.Cog):
     @commands.command(name="hm")
-    async def program(self, ctx):
-        script = ctx.message.content[len(Commands.program.name) + len(CommandPrefix):]
-        script = discord_to_hivemind(script)
-        print(script)
+    async def hivemind_op(self, ctx):
+        script = ctx.message.content[len(Commands.hivemind_op.name) + len(CommandPrefix):]
+        # script = discord_to_hivemind(script)
         if script.strip().lower() == "help":
-            await ctx.send(help_text)
+            await ctx.send(hivemind.HelpText)
         else:
             try:
                 output = hivemind.process(script)
+                if len(output) != 0:
+                    await ctx.send(f"""```\n{str(output, encoding="latin1")}```""")
+                else:
+                    await ctx.send("```\n[no output]```")
+            except Exception as e:
+                await ctx.send(f"```\n[error: {e}]```")
+
+    @commands.command(name="tm")
+    async def termite_op(self, ctx):
+        script = ctx.message.content[len(Commands.termite_op.name) + len(CommandPrefix):]
+        script = strip_discord_formatting(script)
+        if script.strip().lower() == "help":
+            try:
+                with open("TERMITE-SPEC") as f:
+                    await ctx.send(f"```\n{f.read()}```")
+            except OSError:
+                await ctx.send("[cannot open TERMITE-SPEC]")
+        else:
+            formed_script = f'run d "{script}"'
+            try:
+                output = hivemind.process(formed_script)
                 if len(output) != 0:
                     await ctx.send(f"""```\n{str(output, encoding="latin1")}```""")
                 else:
@@ -122,10 +136,10 @@ class Commands(commands.Cog):
         script = ctx.message.content[len(Commands.filesystem.name) + len(CommandPrefix):]
         command, _ = hivemind.parse_next_command(script)
         match command:
+            case [path]:
+                await filesystem_file(ctx, path)
             case ["dir", directory]:
                 await filesystem_dir(ctx, directory)
-            case ["file", path]:
-                await filesystem_file(ctx, path)
             case ["save", path, code]:
                 await filesystem_save(ctx, path, code)
             case ["save", "forced", path, code]:

@@ -24,6 +24,16 @@ Proposals and ideas for the Termite programing language and its development envi
   It might produce quite noticeable overhead in programs that uses jumps a lot
 
 
+- Termite Pipe
+  Ability to interpret termite code for use as pipe for other termite program
+
+  > is interpreted then as "wait until somebody writes"
+  < is interpreted then as "wait until somebody reads"
+
+  Such scheme might be beneficial for implementing certain functionalities such as random number generation
+    This way caller could be freed of need to care about seeds and interpreting it, but could just use typical IO operations
+
+
 - Make portable interpreter
   Originally one of the goals was to make it as independent as possible, but it did harm
     relative to portability, interpreter could be compiled strictly against MinGW under Windows

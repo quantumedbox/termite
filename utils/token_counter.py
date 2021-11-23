@@ -1,5 +1,7 @@
 import sys, string
 
+# todo: deprecate
+
 def count(s: str) -> int:
   print(s)
   count = 0
@@ -7,6 +9,7 @@ def count(s: str) -> int:
   while i < len(s):
     if s[i].isnumeric() or s[i] in {'A', 'B', 'C', 'D', 'E', 'F'}:
       i += 1
+      # todo: could be out of bounds
       if s[i].isnumeric() or s[i] in {'A', 'B', 'C', 'D', 'E', 'F'}:
         count += 1
       else:

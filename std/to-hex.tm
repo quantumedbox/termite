@@ -3,5 +3,4 @@
 
 00 %
 output single byte as ascii representation of its hex
-for example:
-01 byte will output 48 49
+example: |01| byte will output |48 49|

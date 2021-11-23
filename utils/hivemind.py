@@ -25,13 +25,63 @@
 """
 
 # todo: capture return code from Command.do() call for uniform handling of them
-# todo: data command for pushing data in termite syntax
+# todo: read and push file byte contents
 # todo: make interface for appending programs to each other
+# todo: should data be appended at the end? or at the beginning
+#       this way it could be easier to embed other program's results based on input they're read and thus consumed
 
-import os, sys, subprocess, tempfile
+import os, sys, subprocess, tempfile, time
 from typing import List, Tuple, Iterator
 
-default_timeout = 5.0
+# todo: make it better, it's confusing af
+HelpText = """```
+    Hivemind scripts are composed from command sequence
+    Every termite invocation operates on output of previous termite program 
+
+    - stuff in [] are optional elements
+
+    Command syntax:
+        command [arg | "arg"]+ [: whitespace arg]
+
+    Example:
+        run "d":
+            mycode
+
+    Hivemind commands:
+        . run [args-string] code
+            -- run supplied termite code, args are optional
+        . script [args-string] path
+            -- run termite script at given path, args are optional
+        . data content
+            -- append termite syntax text into output buffer
+        . drop # todo: is it needed even?
+            -- zero the output buffer
+
+```"""
+
+# todo: work on bytes internally? or better yet mutable bytearray
+# todo: implement it in termite itself, as it's just data operation 
+def raw_to_termite(text: str) -> bytes:
+    result = ""
+    index = 0
+    while index != len(text):
+        if text[index].isnumeric() or text[index] in {'A', 'B', 'C', 'D', 'E', 'F'}:
+            if index != len(text) - 1:
+                if text[index + 1].isnumeric() or text[index + 1] in {'A', 'B', 'C', 'D', 'E', 'F'}:
+                    leading = ord(text[index]) - ord('0')
+                    if leading > 9: leading -= 7
+                    following = ord(text[index + 1]) - ord('0')
+                    if following > 9: following -= 7
+                    result += chr(leading << 4 | following)
+                    index += 1
+                else:
+                    raise Exception(f"[ill-formed hex token '{text[index:index+2]}']")
+            else:
+                raise Exception(f"[trailing unformed hex token]")
+        else:
+            result += text[index]
+        index += 1
+    return bytes(result, encoding="latin1")
 
 
 class Command:
@@ -114,6 +164,26 @@ class AppendStringCommand(Command):
     def do(self, input_data: bytes, **kwargs) -> bytes:
         return input_data + self.string + b"\x00"
 
+
+class RandomCommand(Command):
+    def __init__(self, seed: int = None):
+        if seed is None:
+            seed = int(time.time())
+        seed %= 256
+        self.seed = seed
+
+    def do(self, input_data: bytes, **kwargs) -> bytes:
+        return input_data + bytes(self.seed)
+
+
+class PushDataCommand(Command):
+    def __init__(self, data: bytes):
+        self.data = data
+
+    def do(self, input_data: bytes, **kwargs) -> bytes:
+        return input_data + self.data
+
+
 # todo: could break easily, maybe just use regex instead?
 def find_next_word(input_str: str) -> Tuple[str, int]:
     index = 0
@@ -191,16 +261,20 @@ def parse_command_sequence(input_str: str) -> List[Command]:
     result = []
     for words in parse_commands(input_str):
         match words:
-            case ["run", "args", arg_string, code]:
+            case ["run", arg_string, code]:
                 result.append(RunCodeCommand(code, arg_string))
             case ["run", code]:
                 result.append(RunCodeCommand(code))
-            case ["script", path, "args", arg_string]:
+            case ["script", arg_string, path]:
                 result.append(RunScriptCommand(path, arg_string))
             case ["script", path]:
                 result.append(RunScriptCommand(path))
-            case ["string", string]:
-                result.append(AppendStringCommand(string))
+            case ["data", data]:
+                result.append(PushDataCommand(raw_to_termite(data)))
+            case ["seed", seed]:
+                result.append(RandomCommand(int(seed)))
+            case ["seed"]:
+                result.append(RandomCommand())
             case ["drop"]:
                 result.append(DropOutputCommand())
             case _:

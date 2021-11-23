@@ -3,6 +3,13 @@ Ideas for shared standard programs that are useful
 - System behind names, probably stylistic too
   For example shortening might be useful, especially if they will be invokable from terimte itself
 
+- Range check
+  Check whether given value is within range of other two
+
+  Example:
+    input: |03 01 04|
+    output: |01|
+
 - Read
   Various read functionalities for acting on supplied data, such as:
     . read-all
@@ -13,6 +20,8 @@ Ideas for shared standard programs that are useful
 
 - Hex to byte
   Could be quite useful, especially in interpreting code
+
+  Main problem is implementing seeking and rewinding it seems
 
   Example:
     input: |31 35|
