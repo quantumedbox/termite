@@ -1,3 +1,4 @@
-*.exe
-*.tm
+/*.exe
+/*.tm
 .env
+__pycache__

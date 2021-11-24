@@ -13,6 +13,7 @@
 
 // todo: catch infinitely conveyoring loops
 // todo: do not include sequential pushes in debug stack output
+// todo: std/check-range-2 false positively detects infinite loop
 
 typedef struct {
   _Bool print_stack_steps;
@@ -100,6 +101,7 @@ read_input(TermiteHandle input_handle,
   // todo: make it compile-time optional?
   // todo: could be dangerous to just mul to 0
   unsigned char shadow_stack[STACK_LIMIT * args.catch_infinite_recursion];
+  unsigned int shadow_stack_rewinded_at = 0U;
   unsigned char shadow_stack_rewinded_with = 0U;
   unsigned int  shadow_stack_len = 0U;
 
@@ -334,11 +336,14 @@ read_input(TermiteHandle input_handle,
         stack_head--;
 
         if (args.catch_infinite_recursion) {
-          if (shadow_stack_rewinded_with != 0U) {
-            if (compare_byte_array(shadow_stack, shadow_stack_len, stack, stack_head)) {
-                crash(OC_INFINITE_LOOP);
-              }
+          if (shadow_stack_rewinded_at != 0U &&
+              shadow_stack_rewinded_at == cursor &&
+              shadow_stack_rewinded_with == n_tokens &&
+              compare_byte_array(shadow_stack, shadow_stack_len, stack, stack_head))
+          {
+            crash(OC_INFINITE_LOOP);
           }
+          shadow_stack_rewinded_at = cursor;
           shadow_stack_rewinded_with = n_tokens;
           shadow_stack_len = stack_head;
           for (unsigned int i = stack_head; i--;)

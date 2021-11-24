@@ -12,7 +12,8 @@
 # todo: passing of interactive console-like stdin handle
 # todo: filesystem help notice
 
-import os
+import os, traceback
+from typing import List
 
 from dotenv import load_dotenv
 import discord
@@ -22,28 +23,27 @@ import hivemind
 
 CommandPrefix = ">"
 ScriptFolder = "shared"
+MaxMessagesPerResponse = 3
 
 
-# todo: fix
-def discord_to_hivemind(input_str: str) -> str:
-    to_process = input_str
-    result = ""
-    while len(to_process) != 0:
-        left = to_process.find("\n```")
-        if left != -1:
-            right = to_process[left+3:].find("```")
-            if right != -1:
-                result += to_process[:left+3]
-                result += "\t" + to_process[left+3:right].replace("\n", "")
-                to_process = to_process[right+3:]
-                continue
-        result += to_process
-        to_process = ""
+# todo: does byte count matters? as string might be lengthed by encoded characters, not bytes
+# todo: divide by \n if they are present
+def package_string(input_str: str, max_size: int = 1500) -> List[str]:
+    result = []
+    to_package = input_str
+    while len(to_package) >= max_size:
+        result.append(to_package[:max_size])
+        to_package = to_package[max_size:]
+    result.append(to_package)
     return result
 
+# todo: fix
+# def format_discord_body_args(input_str: str) -> str:
 
-def strip_discord_formatting(s: str) -> str:
-    result = s.strip()
+
+
+def strip_discord_formatting(input_str: str) -> str:
+    result = input_str.strip()
     if result.startswith("```") and result.endswith("```"):
         l = 0
         for ch in result:
@@ -97,17 +97,23 @@ class Commands(commands.Cog):
     @commands.command(name="hm")
     async def hivemind_op(self, ctx):
         script = ctx.message.content[len(Commands.hivemind_op.name) + len(CommandPrefix):]
-        # script = discord_to_hivemind(script)
+        # script = format_discord_body_args(script)
         if script.strip().lower() == "help":
             await ctx.send(hivemind.HelpText)
         else:
             try:
                 output = hivemind.process(script)
                 if len(output) != 0:
-                    await ctx.send(f"""```\n{str(output, encoding="latin1")}```""")
+                    packages = package_string(str(output, encoding="latin1"))
+                    if len(packages) <= MaxMessagesPerResponse:
+                        for pack in packages:
+                            await ctx.send(f"""```\n{pack}```""")
+                    else:
+                        await ctx.send("```\n[outupt is too big for discord]```")
                 else:
                     await ctx.send("```\n[no output]```")
             except Exception as e:
+                print(traceback.format_exc())
                 await ctx.send(f"```\n[error: {e}]```")
 
     @commands.command(name="tm")
@@ -121,11 +127,16 @@ class Commands(commands.Cog):
             except OSError:
                 await ctx.send("[cannot open TERMITE-SPEC]")
         else:
-            formed_script = f'run d "{script}"'
+            formed_script = f'run d "{script}"\nhex'
             try:
                 output = hivemind.process(formed_script)
                 if len(output) != 0:
-                    await ctx.send(f"""```\n{str(output, encoding="latin1")}```""")
+                    packages = package_string(str(output, encoding="latin1"))
+                    if len(packages) <= MaxMessagesPerResponse:
+                        for pack in packages:
+                            await ctx.send(f"""```\n{pack}```""")
+                    else:
+                        await ctx.send("```\n[outupt is too big for discord]```")
                 else:
                     await ctx.send("```\n[no output]```")
             except Exception as e:

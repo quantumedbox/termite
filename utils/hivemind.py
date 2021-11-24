@@ -18,10 +18,6 @@
                         If file already exists then rewrite its contents
     MAGIC 22 X:NAME - Load content of file at path X into buffer
 
-  Syntax:
-    command [arg [arg ...]]:
-      arg
-
 """
 
 # todo: capture return code from Command.do() call for uniform handling of them
@@ -32,6 +28,8 @@
 
 import os, sys, subprocess, tempfile, time
 from typing import List, Tuple, Iterator
+
+DefaultTimeout = 5.0
 
 # todo: make it better, it's confusing af
 HelpText = """```
@@ -59,12 +57,23 @@ HelpText = """```
 
 ```"""
 
+# todo: hex any integer to hex string
+def int_to_hex(byte: int) -> bytes:
+    if byte > 255:
+        raise Exception("cannot get hex of int bigger than 255")
+    leading = byte // 16 + 0x30
+    if leading > 0x39: leading += 7
+    following = byte % 16 + 0x30
+    if following > 0x39: following += 7
+    return bytes(chr(leading), encoding="ascii") + bytes(chr(following), encoding="ascii")
+
 # todo: work on bytes internally? or better yet mutable bytearray
 # todo: implement it in termite itself, as it's just data operation 
 def raw_to_termite(text: str) -> bytes:
-    result = ""
+    result = b""
     index = 0
     while index != len(text):
+        # todo: isnumeric only checks for numerics in ascii range? if not then it might be erroneous
         if text[index].isnumeric() or text[index] in {'A', 'B', 'C', 'D', 'E', 'F'}:
             if index != len(text) - 1:
                 if text[index + 1].isnumeric() or text[index + 1] in {'A', 'B', 'C', 'D', 'E', 'F'}:
@@ -72,16 +81,16 @@ def raw_to_termite(text: str) -> bytes:
                     if leading > 9: leading -= 7
                     following = ord(text[index + 1]) - ord('0')
                     if following > 9: following -= 7
-                    result += chr(leading << 4 | following)
+                    result += bytes(chr(leading << 4 | following), encoding="latin-1")
                     index += 1
                 else:
                     raise Exception(f"[ill-formed hex token '{text[index:index+2]}']")
             else:
                 raise Exception(f"[trailing unformed hex token]")
-        else:
-            result += text[index]
+        elif not text[index] in {' ', '\n', '\t'}:
+            result += bytes(text[index], encoding="utf-8")
         index += 1
-    return bytes(result, encoding="latin1")
+    return result
 
 
 class Command:
@@ -90,13 +99,12 @@ class Command:
 
 
 # todo: args
-def run_worker_script(path: str, instream: bytes = b"", timeout: float = None, arg_string: str = "") -> Tuple[int, bytes]:
+def run_worker_script(path: str, instream: bytes = b"", timeout: float = DefaultTimeout, arg_string: str = "") -> Tuple[int, bytes]:
     kwargs = {
         "capture_output": True,
-        "input": instream
+        "input": instream,
+        "timeout": timeout,
     }
-    if timeout is not None:
-        kwargs["timeout"] = timeout
     execution = subprocess.run(["termite-worker", path, arg_string], **kwargs)
     return (execution.returncode, execution.stdout)
 
@@ -111,7 +119,7 @@ class RunCodeCommand(Command):
         descriptor, tpath = tempfile.mkstemp(dir=os.getcwd())
         try:
             with open(tpath, "w+b") as f:
-                f.write(bytes(self.code, encoding="latin1"))
+                f.write(self.code.encode("utf-8"))
             returncode, output = run_worker_script(os.path.basename(tpath), input_data, arg_string=self.arg_string)
             if returncode != 0:
                 returncode, errorout = run_worker_script(
@@ -184,7 +192,19 @@ class PushDataCommand(Command):
         return input_data + self.data
 
 
+class InvisToHex(Command):
+    def do(self, input_data: bytes, **kwargs) -> bytes:
+        result = b""
+        for ch in input_data:
+            if ch == 0x7F or (ch < 0x20 and ch != 0x9 and ch != 0xA):
+                result += int_to_hex(ch)
+            else:
+                result += bytes(chr(ch), encoding="latin1")
+        return result
+
+
 # todo: could break easily, maybe just use regex instead?
+# todo: fix it
 def find_next_word(input_str: str) -> Tuple[str, int]:
     index = 0
     while index < len(input_str):
@@ -221,6 +241,7 @@ def find_next_word(input_str: str) -> Tuple[str, int]:
                         return (input_str[beginning:index + newline].strip(), index + newline)
                 return (input_str[beginning:index].strip(), index) # todo: is it okay?
             case _:
+                # if something starts by whitespace and followed by it - it will be reported as word even if it's actually empty
                 beginning = index
                 while index < len(input_str):
                     match input_str[index]:
@@ -240,6 +261,7 @@ def parse_next_command(input_str: str) -> Tuple[List[str], int]:
     result = []
     index = 0
     word, parsed = find_next_word(input_str)
+    print(word)
     while parsed != 0:
         result.append(word)
         if index + parsed != len(input_str) and input_str[index + parsed] == "\n":
@@ -247,6 +269,7 @@ def parse_next_command(input_str: str) -> Tuple[List[str], int]:
             break
         index += parsed
         word, parsed = find_next_word(input_str[index:])
+        print(word)
     return (result, index + parsed)
 
 def parse_commands(input_str: str) -> Iterator[List[str]]:
@@ -271,12 +294,16 @@ def parse_command_sequence(input_str: str) -> List[Command]:
                 result.append(RunScriptCommand(path))
             case ["data", data]:
                 result.append(PushDataCommand(raw_to_termite(data)))
+            case ["hex"]:
+                result.append(InvisToHex())
             case ["seed", seed]:
                 result.append(RandomCommand(int(seed)))
             case ["seed"]:
                 result.append(RandomCommand())
             case ["drop"]:
                 result.append(DropOutputCommand())
+            case [code]:
+                result.append(RunCodeCommand(code, "d"))
             case _:
                 raise Exception(f"unknown command: {words}")
     return result

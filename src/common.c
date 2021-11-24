@@ -47,13 +47,13 @@ write_uint(TermiteHandle file, unsigned int value) {
 // todo: restrict might be dangerous in this case
 _Bool
 compare_byte_array(unsigned char* restrict first, unsigned int first_len,
-                    unsigned char* restrict second, unsigned int second_len)
+                   unsigned char* restrict second, unsigned int second_len)
 {
   if (first_len != second_len)
     return (_Bool)0;
 
   for (unsigned int i = 0U; i < first_len; i++) {
-    if (*first != *second)
+    if (*first++ != *second++)
       return (_Bool)0;
   }
   return (_Bool)1;

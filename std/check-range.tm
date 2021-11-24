@@ -1,7 +1,7 @@
 >.>.>.
-@$?~^$?^=04*]t<02]f<
+@$?~^$?^=<
 
-00 % // todo "@02?~^@06?#^$=04*]t<02]f<" <- this works, but without arbitrary bounds
+00 %
 check if value is in given range
 first byte  - low bound, including
 second byte - high bound, excluding
